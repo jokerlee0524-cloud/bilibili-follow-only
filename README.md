@@ -6,7 +6,9 @@
 
 零依赖、零上报、全部数据跑在你自己已登录的浏览器里。
 
-![关注流模式](docs/preview-feed.png)
+![只看关注](docs/screenshot-real.png)
+
+<sub>真实运行截图：已登录状态、352 个关注，卡片全部来自关注的 UP 主。</sub>
 
 ---
 
@@ -32,7 +34,9 @@ B 站首页的推荐流是会"驯化"人的：你多看两眼的东西，第二�
 - 「刷新关注列表」（清缓存重拉）
 - 「打开 B 站首页」
 
-![过滤模式](docs/preview-filter.png)
+![工具栏弹窗](docs/preview-popup.png)
+
+<sub>工具栏弹窗：总开关、模式切换、关注数与同步时间。</sub>
 
 ---
 
@@ -103,6 +107,7 @@ B 站首页的推荐流是会"驯化"人的：你多看两眼的东西，第二�
 ```
 bilibili-follow-only/
 ├─ manifest.json      MV3 清单
+├─ CHANGELOG.md       更新日志
 ├─ feed.js            内容脚本：注入面板 / 过滤卡片 / 降级逻辑
 ├─ feed.css           面板与卡片样式（含隐藏原推荐的规则、深色模式）
 ├─ wbi.js             接口封装：nav、关注列表、关注动态流、wbi 签名
@@ -131,6 +136,10 @@ cd test && python -m http.server 8130 --bind 127.0.0.1
 
 `?dev=1` 只对 `127.0.0.1 / localhost` 生效，真实站点上不存在这个分支。
 夹具里的封面图（`test/mock/covers/`）不随仓库分发，本地调试时随便放几张图即可。
+
+夹具环境下长这样（封面是渐变占位图，用来验证布局和过滤逻辑）：
+
+![夹具环境](docs/preview-feed.png)
 
 ---
 
