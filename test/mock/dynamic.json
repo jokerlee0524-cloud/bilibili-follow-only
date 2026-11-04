@@ -1,0 +1,130 @@
+{
+  "code": 0,
+  "message": "0",
+  "data": {
+    "has_more": false,
+    "offset": "",
+    "items": [
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "老番茄", "mid": 1001, "face": "mock/covers/f1.png", "pub_time": "3小时前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1GJ411x7h7", "title": "我把整条街的监控都接进了自己家客厅",
+                "cover": "mock/covers/c1.jpg", "duration_text": "18:42",
+                "stat": { "play": 1284000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "影视飓风", "mid": 1002, "face": "mock/covers/f2.png", "pub_time": "5小时前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1xx411c7mD", "title": "8K 拍下深海三千米，我们在水下待了 9 天",
+                "cover": "mock/covers/c2.jpg", "duration_text": "26:08",
+                "stat": { "play": 863000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "何同学", "mid": 1003, "face": "mock/covers/f1.png", "pub_time": "昨天" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1ab4y1Q7Hk", "title": "花了三个月，我做了一台只会写字的机器人",
+                "cover": "mock/covers/c3.jpg", "duration_text": "12:35",
+                "stat": { "play": 2140000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "稚晖君", "mid": 1005, "face": "mock/covers/f2.png", "pub_time": "2天前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1cb411T7fQ", "title": "从零开始造一只会走路的机械狗（下集）",
+                "cover": "mock/covers/c5.jpg", "duration_text": "31:20",
+                "stat": { "play": 975000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "小约翰可汗", "mid": 1006, "face": "mock/covers/f1.png", "pub_time": "3天前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1Rt411u7YQ", "title": "这个国家只有 6 万人，却打赢过三个邻国",
+                "cover": "mock/covers/c4.jpg", "duration_text": "22:11",
+                "stat": { "play": 1680000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "影视飓风", "mid": 1002, "face": "mock/covers/f2.png", "pub_time": "4天前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1qy4y1K7Wx", "title": "我们把一台 40 万的摄影机拆成了零件",
+                "cover": "mock/covers/c6.jpg", "duration_text": "15:02",
+                "stat": { "play": 542000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "老番茄", "mid": 1001, "face": "mock/covers/f1.png", "pub_time": "5天前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1Yp4y1B7kR", "title": "在地下车库躲了 24 小时，全程只靠外卖存活",
+                "cover": "mock/covers/c3.jpg", "duration_text": "20:47",
+                "stat": { "play": 3310000 }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": { "name": "老师好我叫何同学", "mid": 1004, "face": "mock/covers/f1.png", "pub_time": "6天前" },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1eN411Z7dF", "title": "一张纸能把手机信号挡住吗？我们测了 60 种材料",
+                "cover": "mock/covers/c1.jpg", "duration_text": "11:18",
+                "stat": { "play": 128400 }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

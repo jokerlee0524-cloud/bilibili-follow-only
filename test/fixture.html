@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>B站首页 · 本地夹具（只用于验证插件）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f6f7f8; color: #18191c;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  .topbar { height: 56px; background: #fff; border-bottom: 1px solid #e3e5e7; display: flex; align-items: center; padding: 0 24px; font-weight: 600; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 18px 24px 60px; }
+  .bili-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px 16px; }
+  .bili-video-card__wrap { background: #fff; border-radius: 8px; overflow: hidden; }
+  .bili-video-card__image--link { display: block; aspect-ratio: 16/10; background: linear-gradient(135deg, #cfd8e3, #aab6c6); position: relative; }
+  .bili-video-card__image--link span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; color: #fff; opacity: .85; }
+  .bili-video-card__info { padding: 8px 10px 12px; }
+  .bili-video-card__info--tit { font-size: 14px; line-height: 1.45; margin: 0 0 8px; font-weight: 500; }
+  .bili-video-card__info--tit a { color: inherit; text-decoration: none; }
+  .bili-video-card__info--bottom { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9499a0; }
+  .bili-video-card__info--author { color: #61666d; }
+  .tag { margin-left: auto; font-size: 10px; padding: 1px 5px; border-radius: 3px; background: #f1f2f3; color: #9499a0; }
+  .recommended-swipe { height: 120px; background: #fff; border-radius: 8px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; color: #9499a0; font-size: 13px; }
+  .banner-card { background: #fff; border-radius: 8px; padding: 16px; font-size: 13px; color: #9499a0; }
+</style>
+</head>
+<body>
+<div class="topbar">哔哩哔哩 · 首页（本地夹具）</div>
+<div id="i_cecream">
+  <div class="bili-feed4">
+    <div class="container">
+
+      <div class="recommended-swipe">轮播推荐位（应当被隐藏）</div>
+
+      <div class="bili-grid">
+
+        <div class="bili-video-card" data-expect="keep">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1GJ411x7h7"><span>封面 · 老番茄</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1GJ411x7h7">原生卡片：已在关注的 UP 主（应保留）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/1001" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">老番茄</span></a>
+                <span class="tag">关注</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1zz411q7aa"><span>封面 · 随机 UP</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1zz411q7aa">原生卡片：未关注 UP 主（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/888001" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">随机游戏区UP</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="keep">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1xx411c7mD"><span>封面 · 影视飓风</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1xx411c7mD">原生卡片：影视飓风的新片（应保留）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/1002" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">影视飓风</span></a>
+                <span class="tag">关注</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1bb411p7xz"><span>封面 · 广告</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1bb411p7xz">原生卡片：未关注的广告内容（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/888002" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">某品牌官方号</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1cc411n7vv"><span>封面 · 舞蹈区</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1cc411n7vv">原生卡片：宅舞三连（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/888003" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">某舞见</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="keep">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1ab4y1Q7Hk"><span>封面 · 何同学</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1ab4y1Q7Hk">原生卡片：写字机器人（应保留）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/1003" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">何同学</span></a>
+                <span class="tag">关注</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1dd411m7qq"><span>封面 · 生活区</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1dd411m7qq">原生卡片：今天也要好好吃饭（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/888004" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">某生活UP</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1ee411k7ww"><span>封面 · 无作者</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1ee411k7ww">原生卡片：认不出作者的活动卡（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom"><span>活动推广</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bili-video-card" data-expect="hide">
+          <div class="bili-video-card__wrap">
+            <a class="bili-video-card__image--link" href="//www.bilibili.com/video/BV1ff411j7ee"><span>封面 · 数码区</span></a>
+            <div class="bili-video-card__info">
+              <h3 class="bili-video-card__info--tit"><a href="//www.bilibili.com/video/BV1ff411j7ee">原生卡片：新机开箱（应隐藏）</a></h3>
+              <div class="bili-video-card__info--bottom">
+                <a href="//space.bilibili.com/888005" class="bili-video-card__info--owner"><span class="bili-video-card__info--author">某数码UP</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

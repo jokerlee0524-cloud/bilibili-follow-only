@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "B站 · 只看关注",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn5vN8prc/TUi2byChssRsz8nURxwJMmbi6js407/4wFPFpDuzVdZR1vWA07h0QpDHxaJkoOsvwy9IMfvc2Jv8T1gqTtvzcJV0tMdEPfHHrZGKYS/0lgFAEbBwkhQJ4ZH70X43vx1WdvIaLXU+IdomWapDwyItTVOXu0uahdoCP2wXx6SwXNZv3+uTjZba7NZrmM31DzmyQpDmb9H8we2cySgn01ejB8dft4IZw3yHUIxoNg6wYlpJUoTlKdMrqlrPPl33qMM1NLmVTcb4zfNYT2W4lupheFTdMT6DqkLV10TkOHlHqDJZ7vBhXUPO3tUcVVFq1yl+PI/tidNY98AGwIDAQAB",
+  "description": "把 B 站首页变成只属于你关注 UP 主的视频流，屏蔽掉非关注的推荐内容。",
+  "minimum_chrome_version": "102",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://api.bilibili.com/*",
+    "https://www.bilibili.com/*"
+  ],
+  "background": {
+    "service_worker": "bg.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "B站 · 只看关注",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.bilibili.com/*",
+        "https://bilibili.com/*"
+      ],
+      "js": [
+        "md5.js",
+        "wbi.js",
+        "feed.js"
+      ],
+      "css": [
+        "feed.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

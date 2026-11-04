@@ -1,0 +1,375 @@
+/* B站 · 只看关注 —— 样式
+ * 尽量贴近 B 站首页原生观感：白卡片 + 圆角 + 粉色/蓝色点缀，支持深色模式。
+ */
+
+html {
+  --bfonly-pink: #fb7299;
+  --bfonly-blue: #00aeec;
+  --bfonly-text: #18191c;
+  --bfonly-sub: #9499a0;
+  --bfonly-line: #e3e5e7;
+  --bfonly-bg: #ffffff;
+  --bfonly-soft: #f6f7f8;
+}
+
+html.dark,
+html[data-theme='dark'],
+html[data-bs-theme='dark'] {
+  --bfonly-text: #e3e5e7;
+  --bfonly-sub: #9499a0;
+  --bfonly-line: #2a2b2f;
+  --bfonly-bg: #1d1e20;
+  --bfonly-soft: #232426;
+}
+
+/* ---------- replace 模式：藏掉原生推荐流 ---------- */
+/* 新版首页：#app > .bili-feed4 > main.bili-feed4-layout > .feed2 */
+html.bfonly-replace #app .bili-feed4 main.bili-feed4-layout .feed2,
+html.bfonly-replace #app .feed2,
+html.bfonly-replace #i_cecream .bili-feed4 .bili-video-card,
+html.bfonly-replace #i_cecream .bili-feed4 .feed-card,
+html.bfonly-replace #i_cecream .bili-feed4 .floor-single-card,
+html.bfonly-replace #i_cecream .bili-feed4 .recommended-swipe,
+html.bfonly-replace #i_cecream .bili-feed4 .bili-live-card,
+html.bfonly-replace #i_cecream .bili-feed4 .palette-feed,
+html.bfonly-replace #i_cecream .bili-feed4 .bili-feed4-layout .feed-card,
+html.bfonly-replace #reco_list,
+html.bfonly-replace .bili-feed4 .ad-report,
+html.bfonly-replace .bili-feed4 .floor-single-card {
+  display: none !important;
+}
+
+/* 原生骨架/占位也一起收起，避免留白 */
+html.bfonly-replace #i_cecream .bili-feed4 .feed-skeleton,
+html.bfonly-replace #i_cecream .bili-feed4 .bili-video-card-skeleton {
+  display: none !important;
+}
+
+/* ---------- 面板 ---------- */
+.bfonly-panel {
+  margin: 0 0 20px;
+  padding: 18px 20px 22px;
+  background: var(--bfonly-bg);
+  border: 1px solid var(--bfonly-line);
+  border-radius: 10px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  color: var(--bfonly-text);
+  animation: bfonly-in 0.28s ease-out;
+}
+
+@keyframes bfonly-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.bfonly-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.bfonly-head-left { min-width: 0; }
+
+.bfonly-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--bfonly-text);
+}
+
+.bfonly-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--bfonly-pink), #ff9db8);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.bfonly-logo::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid #fff;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+.bfonly-beta {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--bfonly-pink);
+  border: 1px solid rgba(251, 114, 153, 0.4);
+  background: rgba(251, 114, 153, 0.08);
+  border-radius: 4px;
+  padding: 2px 5px;
+  transform: translateY(-1px);
+}
+
+.bfonly-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--bfonly-sub);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bfonly-head-right {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.bfonly-btn {
+  appearance: none;
+  border: 1px solid var(--bfonly-line);
+  background: var(--bfonly-bg);
+  color: var(--bfonly-text);
+  font-size: 13px;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  font-family: inherit;
+}
+
+.bfonly-btn:hover {
+  border-color: var(--bfonly-pink);
+  color: var(--bfonly-pink);
+}
+
+.bfonly-btn.ghost {
+  background: transparent;
+  color: var(--bfonly-sub);
+}
+
+.bfonly-btn.more {
+  padding: 10px 26px;
+}
+
+.bfonly-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ---------- 卡片网格 ---------- */
+.bfonly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(206px, 1fr));
+  gap: 20px 16px;
+}
+
+.bfonly-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+  transition: transform 0.16s ease;
+}
+
+.bfonly-card:hover {
+  transform: translateY(-3px);
+  color: inherit;
+  text-decoration: none;
+}
+
+.bfonly-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bfonly-soft);
+}
+
+.bfonly-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bfonly-cover.empty::after {
+  content: '无封面';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--bfonly-sub);
+}
+
+.bfonly-dur {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 5px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  line-height: 1.5;
+}
+
+.bfonly-info { padding: 8px 2px 0; }
+
+.bfonly-card-title {
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--bfonly-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 40px;
+}
+
+.bfonly-card:hover .bfonly-card-title { color: var(--bfonly-pink); }
+
+.bfonly-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--bfonly-sub);
+  min-width: 0;
+}
+
+.bfonly-face {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--bfonly-soft);
+}
+
+.bfonly-up {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 42%;
+  color: #61666d;
+}
+
+html.dark .bfonly-up,
+html[data-theme='dark'] .bfonly-up { color: #aeb3b9; }
+
+.bfonly-play {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--bfonly-sub);
+}
+
+/* ---------- 底部 ---------- */
+.bfonly-foot {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 20px;
+}
+
+.bfonly-hint {
+  font-size: 12px;
+  color: var(--bfonly-sub);
+}
+
+/* ---------- 状态 ---------- */
+.bfonly-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 54px 20px;
+  background: var(--bfonly-soft);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.bfonly-state-icon { font-size: 28px; line-height: 1; }
+
+.bfonly-state-text {
+  font-size: 14px;
+  color: var(--bfonly-sub);
+  line-height: 1.6;
+  max-width: 460px;
+}
+
+.bfonly-cta {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 9px 22px;
+  border-radius: 6px;
+  background: var(--bfonly-pink);
+  color: #fff !important;
+  font-size: 13px;
+  text-decoration: none !important;
+  transition: filter 0.16s ease;
+}
+
+.bfonly-cta:hover { filter: brightness(1.06); }
+
+/* ---------- 过滤模式的小胶囊 ---------- */
+.bfonly-chip {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 9px 14px;
+  background: rgba(24, 25, 28, 0.9);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(6px);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.bfonly-chip.warn { background: rgba(251, 114, 153, 0.94); }
+
+.bfonly-chip-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.bfonly-chip-btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 900px) {
+  .bfonly-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 16px 12px; }
+  .bfonly-panel { padding: 14px; }
+  .bfonly-title { font-size: 17px; }
+  .bfonly-head-right { display: none; }
+  .bfonly-card-title { font-size: 13px; min-height: 38px; }
+}

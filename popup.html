@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B站 · 只看关注</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="head">
+    <div class="logo"></div>
+    <div class="head-text">
+      <h1>只看关注</h1>
+      <p>首页只留你关注的 UP 主</p>
+    </div>
+    <span class="ver">v1.0</span>
+  </header>
+
+  <section class="row main-switch">
+    <div class="row-text">
+      <div class="row-title">开启过滤</div>
+      <div class="row-sub" id="stateText">正在读取状态…</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="enabled" checked>
+      <span class="slider"></span>
+    </label>
+  </section>
+
+  <section class="seg" id="modeSeg">
+    <button type="button" data-mode="replace" class="seg-btn active">
+      <b>关注流</b><span>首页换成只关注的内容</span>
+    </button>
+    <button type="button" data-mode="filter" class="seg-btn">
+      <b>仅过滤</b><span>保留原首页，藏掉非关注</span>
+    </button>
+  </section>
+
+  <section class="stat">
+    <div class="stat-num" id="followCount">—</div>
+    <div class="stat-label">
+      <span>位 UP 主</span>
+      <em id="cacheTime">尚未同步</em>
+    </div>
+  </section>
+
+  <section class="actions">
+    <button type="button" id="refreshBtn" class="btn primary">刷新关注列表</button>
+    <button type="button" id="openBtn" class="btn">打开 B 站首页</button>
+  </section>
+
+  <footer class="foot">
+    <span id="hint">需要登录 B 站才能读取关注列表</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# 签名私钥，绝对不能进版本库
+keys/
+
+# 夹具里用的封面图（第三方版权素材，不入库）
+test/mock/covers/
+
+# 打包产物
+*.zip
+*.crx
+*.pem
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
