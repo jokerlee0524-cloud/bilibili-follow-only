@@ -20,15 +20,17 @@
   var IS_DEV = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && /[?&]dev=1/.test(location.search);
   if (!IS_HOME && !IS_DEV) return;
 
+  var FEED_VERSION = '1.1.1';          // 与 manifest.json 保持一致，供 popup 做版本握手
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
-  var CACHE_TTL = 12 * 60 * 60 * 1000; // 关注列表缓存 12 小时
-  var FILL_BATCH = 24;                 // 每批渲染多少张卡
+  var CACHE_TTL = 12 * 60 * 60 * 1000;  // 关注列表缓存 12 小时
+  var SPECIAL_TTL = 30 * 60 * 1000;     // 特别关注集合缓存 30 分钟（比关注列表短，换特别关注后能较快同步）
+  var FILL_BATCH = 24;                  // 每批渲染多少张卡
 
   var DEFAULT_CFG = { enabled: true, mode: 'replace', specialOnly: false };
 
   var cfg = Object.assign({}, DEFAULT_CFG);
-  var following = null;   // { ts, mid, total, list, set }
+  var following = null;   // { ts, mid, total, list, set, special }
   var feed = { raw: [], items: [], offset: '', hasMore: true, loading: false };
   var status = 'loading'; // loading | ready | notlogin | error | disabled
   var statusText = '';
@@ -37,10 +39,14 @@
   var metaEl = null;
   var footEl = null;
   var hiddenCount = 0;
-  var specialUnavailable = false;  // 开了特别关注但读不到列表 → 降级按全部关注显示
+  var specialUnavailable = false;  // 开了特别关注但接口失败 → 降级按全部关注显示
+  var specialEmpty = false;        // 接口成功、但这个账号确实没设任何特别关注
+  var specialReason = '';          // 失败原因（分组接口返回码 / 异常），直接展示给用户
   var filterObserver = null;
   var reinsertObserver = null;
   var started = false;
+
+  document.documentElement.setAttribute('data-bfonly-ver', FEED_VERSION);
 
   /* ---------------- 工具 ---------------- */
 
@@ -112,69 +118,106 @@
 
   /* ---------------- 关注列表 ---------------- */
 
-  /* 旧版（1.0.x）缓存把 special 字段丢掉了，开了特别关注就必须重拉一次 */
-  function hasSpecialInfo(data) {
-    if (!data || !data.list || !data.list.length) return false;
-    if (Array.isArray(data.specialMids) || data.specialTried) return true;
-    return data.list.some(function (u) {
-      return typeof u.special !== 'undefined' || Array.isArray(u.tag);
-    });
+  /* 旧版（1.0.x / 1.1.0）缓存没有解析过特别关注集合，不能拿来当「已解析」用。
+   * 只认新字段 specialResolved，避免「list 里带 special:0 就算有信息」这种假阳性。 */
+  function specialCacheValid(data) {
+    return !!(data && data.specialResolved &&
+      typeof data.specialTs === 'number' &&
+      Date.now() - data.specialTs < SPECIAL_TTL);
   }
 
   function forceNoSpecial() {
     return IS_DEV && /[?&]nospecial=1/.test(location.search);
   }
 
+  /* 关注列表 + 特别关注集合。
+   * 开了特别关注却命中旧缓存时，必须重新解析分组接口——这正是 1.1.0 实测失效的根因。 */
   async function loadFollowing(nav) {
     var cached = (await storageGet(FOLLOW_KEY))[FOLLOW_KEY];
     var fresh = cached && cached.list && cached.list.length &&
       cached.mid === nav.mid && Date.now() - cached.ts < CACHE_TTL;
-    if (fresh && (!cfg.specialOnly || hasSpecialInfo(cached))) {
-      return decorate(cached);
+    var needSpecial = cfg.specialOnly && !specialCacheValid(cached);
+
+    if (fresh && !needSpecial) return decorate(cached);
+
+    var data;
+    if (fresh) {
+      data = cached;   // 关注列表还新鲜，只补特别关注集合
+    } else {
+      var res = await globalThis.bfApi.getFollowing(nav.mid, function (got, total) {
+        setMeta('正在读取关注列表 ' + got + (total ? ' / ' + total : '') + ' 位…');
+      });
+      data = { ts: Date.now(), mid: nav.mid, total: res.total || res.list.length,
+               list: res.list, specialSeen: !!res.specialSeen };
     }
 
-    var res = await globalThis.bfApi.getFollowing(nav.mid, function (got, total) {
-      setMeta('正在读取关注列表 ' + got + (total ? ' / ' + total : '') + ' 位…');
-    });
-    var data = { ts: Date.now(), mid: nav.mid, total: res.total || res.list.length, list: res.list };
-    var dec = decorate(data);
-
-    // 主通道一个特别关注都没读到 → 走分组接口兜底，结果写回缓存（TTL 内不重复请求）
-    if (cfg.specialOnly && dec.special.size === 0 && !forceNoSpecial() && !data.specialTried) {
-      try {
-        var mids = await globalThis.bfApi.getSpecialFollowings();
-        if (mids && mids.length) data.specialMids = mids;
-      } catch (e) { /* 兜底失败按空集合降级，不阻断首页 */ }
-      data.specialTried = true;
-      dec = decorate(data);
+    if (cfg.specialOnly) {
+      setMeta('正在读取「特别关注」分组…');
+      if (forceNoSpecial()) {
+        // DEV：模拟分组接口整体失败
+        data.specialMids = [];
+        data.specialOk = false;
+        data.specialSource = '';
+        data.specialDetail = 'DEV 模拟：分组接口不可用';
+      } else {
+        try {
+          var sp = await globalThis.bfApi.getSpecialFollowings();
+          data.specialMids = sp.mids || [];
+          data.specialOk = sp.ok !== false;
+          data.specialSource = sp.source || '';
+          data.specialDetail = sp.detail || '';
+          // 关系列表里的 special / tag 也算一份证据，取并集
+          if (!sp.ok && data.list) {
+            var fallback = data.list.filter(function (u) {
+              var tagged = Array.isArray(u.tag) && u.tag.some(function (t) { return Number(t) === -10; });
+              return u.special === 1 || u.special === true || tagged;
+            }).map(function (u) { return String(u.mid); });
+            if (fallback.length) {
+              data.specialMids = fallback;
+              data.specialOk = true;
+              data.specialSource = 'relations';
+              data.specialDetail = '分组接口不可用，改用关注列表里的特别关注标记';
+            }
+          }
+        } catch (e) {
+          data.specialMids = [];
+          data.specialOk = false;
+          data.specialSource = '';
+          data.specialDetail = '分组接口异常：' + (e && e.message ? e.message : e);
+        }
+      }
+      data.specialResolved = true;
+      data.specialTs = Date.now();
     }
 
     var o = {};
     o[FOLLOW_KEY] = data;
     await storageSet(o);
-    return dec;
+    return decorate(data);
   }
 
   function decorate(data) {
     var set = new Set();
     var special = new Set();
-    data.list.forEach(function (u) {
+    (data.list || []).forEach(function (u) {
       var mid = String(u.mid);
       set.add(mid);
       var tagged = Array.isArray(u.tag) && u.tag.some(function (t) { return Number(t) === -10; });
       if (u.special === 1 || u.special === true || tagged) special.add(mid);
     });
+    // DEV：模拟 B 站不再返回 special 字段（只认分组接口结果）
+    if (IS_DEV && /[?&]nofield=1/.test(location.search)) special = new Set();
     if (Array.isArray(data.specialMids)) {
       data.specialMids.forEach(function (m) { special.add(String(m)); });
     }
-    // DEV：模拟 B 站不再返回 special 字段（且尚未拿到兜底结果），验证分组接口兜底
-    if (IS_DEV && /[?&]nofield=1/.test(location.search) && !Array.isArray(data.specialMids)) {
-      special = new Set();
-    }
-    if (forceNoSpecial()) special = new Set();  // DEV：模拟接口读不到特别关注
+    if (forceNoSpecial()) special = new Set();
     return {
-      ts: data.ts, mid: data.mid, total: data.list.length,
-      list: data.list, set: set, special: special
+      ts: data.ts, mid: data.mid, total: (data.list || []).length,
+      list: data.list || [], set: set, special: special,
+      specialResolved: !!data.specialResolved,
+      specialOk: data.specialOk !== false,
+      specialSource: data.specialSource || '',
+      specialDetail: data.specialDetail || ''
     };
   }
 
@@ -287,8 +330,17 @@
     return panel;
   }
 
+  function scopedNow() {
+    return !!(cfg.specialOnly && !specialUnavailable && !specialEmpty &&
+      following && following.special && following.special.size);
+  }
+
   function syncScopeBtn() {
     var b = document.querySelector('#bfonly-panel .bfonly-scope-btn');
+    var t = document.querySelector('#bfonly-panel .bfonly-title-text');
+    var beta = document.querySelector('#bfonly-panel .bfonly-beta');
+    if (t) t.textContent = scopedNow() ? '★ 只看特别关注' : '只看关注';
+    if (beta) beta.textContent = scopedNow() ? 'SPECIAL ONLY' : 'ONLY FOLLOWING';
     if (!b) return;
     b.classList.toggle('active', !!cfg.specialOnly);
     b.textContent = cfg.specialOnly ? '★ 特别关注' : '☆ 特别关注';
@@ -299,6 +351,29 @@
 
   function setMeta(text) {
     if (metaEl) metaEl.textContent = text;
+  }
+
+  /* 副标题统一口径：范围 / 数量 / 失败原因，一眼能看出开关到底有没有生效 */
+  function scopeMeta() {
+    if (!cfg.specialOnly) {
+      return '已关注 ' + (following ? following.total : 0) + ' 位 UP 主 · 只显示他们的视频';
+    }
+    if (specialUnavailable) {
+      return '⚠ 特别关注读取失败，暂时按全部关注显示 · ' + (specialReason || '点「刷新」重试');
+    }
+    if (specialEmpty) {
+      return '★ 你还没有设置特别关注 · 暂时按全部关注显示';
+    }
+    return '★ 只看特别关注 · 命中 ' + following.special.size +
+      ' 位 UP 主（共关注 ' + following.total + ' 位）';
+  }
+
+  function emptyText() {
+    if (specialUnavailable) return '特别关注列表读取失败，暂时显示关注流；点「刷新」重试。';
+    if (specialEmpty) return '你还没有把任何 UP 主设为特别关注，先去 B 站设置一下吧。';
+    return cfg.specialOnly
+      ? '特别关注的 UP 主最近没有发视频，过段时间再来看看。'
+      : '关注列表里的 UP 主最近没有发视频，过段时间再来看看。';
   }
 
   function clearGrid() {
@@ -372,9 +447,7 @@
     if (!gridEl) return;
     gridEl.textContent = '';
     if (!feed.items.length) {
-      renderState('empty', cfg.specialOnly
-        ? '特别关注的 UP 主最近没有发视频，过段时间再来看看。'
-        : '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
+      renderState('empty', emptyText());
       return;
     }
     feed.items.forEach(function (it) { gridEl.appendChild(makeCard(it)); });
@@ -396,12 +469,20 @@
     } else if (feed.items.length) {
       footEl.appendChild(h('span', 'bfonly-hint',
         specialUnavailable ? '没有更多了 · 按全部关注显示'
-          : (cfg.specialOnly ? '没有更多了 · 只显示特别关注的 UP 主'
-                             : '没有更多了 · 只显示你关注的 UP 主')));
+          : specialEmpty ? '没有更多了 · 你还没设置特别关注'
+          : scopedNow() ? '没有更多了 · 只显示特别关注的 UP 主'
+                        : '没有更多了 · 只显示你关注的 UP 主'));
     }
     if (specialUnavailable) {
       footEl.appendChild(h('span', 'bfonly-hint warn',
-        '⚠ 读不到特别关注列表，暂时按全部关注显示'));
+        '⚠ 特别关注读取失败，暂时按全部关注显示 · ' + (specialReason || '点「刷新」重试')));
+      var retry = h('button', 'bfonly-btn ghost', '重试');
+      retry.type = 'button';
+      retry.addEventListener('click', function () { refreshFollowing(); });
+      footEl.appendChild(retry);
+    } else if (specialEmpty) {
+      footEl.appendChild(h('span', 'bfonly-hint warn',
+        '★ 到 B 站「关注」页把 UP 主设为特别关注后，点「刷新」即可生效'));
     }
   }
 
@@ -457,9 +538,7 @@
         throw new Error('返回 ' + rawSeen + ' 条动态但解析不到视频，B 站可能改版了');
       }
       if (!feed.items.length) {
-        renderState('empty', cfg.specialOnly
-          ? '特别关注的 UP 主最近没有发视频，过段时间再来看看。'
-          : '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
+        renderState('empty', emptyText());
       } else {
         renderFeed();
       }
@@ -506,7 +585,7 @@
   function applyFilter() {
     var cards = document.querySelectorAll('#app ' + CARD_SEL + ', #i_cecream ' + CARD_SEL + ', #reco_list ' + CARD_SEL);
     var active = activeSet();
-    var scoped = !!(cfg.specialOnly && following && following.special && following.special.size);
+    var scoped = scopedNow();
     var hidden = 0;
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
@@ -557,9 +636,11 @@
     var scopeBtn = chip.querySelector('.bfonly-chip-scope');
     if (scopeBtn) scopeBtn.textContent = scoped ? '看全部关注' : '只看特别关注';
     chip.querySelector('.bfonly-chip-text').textContent =
-      (specialUnavailable ? '⚠ 读不到特别关注 · 按全部关注'
-        : (scoped ? '只看特别关注' : '只看关注')) +
-      ' · 已隐藏 ' + hiddenCount + ' 条' + (scoped ? '非特别关注' : '非关注') + '内容';
+      (specialUnavailable ? '⚠ 特别关注读取失败 · 按全部关注'
+        : specialEmpty ? '★ 你还没设置特别关注 · 按全部关注'
+        : scoped ? '★ 只看特别关注（' + following.special.size + ' 位）' : '只看关注') +
+      ' · 已隐藏 ' + hiddenCount + ' 条' + (scoped ? '非特别关注' : '非关注') + '内容' +
+      (specialUnavailable && specialReason ? ' · ' + specialReason : '');
   }
 
   function startFilter() {
@@ -614,6 +695,8 @@
     started = true;
     await loadCfg();
     specialUnavailable = false;
+    specialEmpty = false;
+    specialReason = '';
     resetFeed();
 
     if (!cfg.enabled) {
@@ -654,14 +737,9 @@
       return;
     }
 
-    specialUnavailable = !!(cfg.specialOnly && !following.special.size);
-    if (cfg.specialOnly) {
-      setMeta(specialUnavailable
-        ? '⚠ 读不到特别关注列表，暂时按全部关注显示'
-        : '已关注 ' + following.total + ' 位 · 只看其中 ' + following.special.size + ' 位特别关注');
-    } else {
-      setMeta('已关注 ' + following.total + ' 位 UP 主 · 只显示他们的视频');
-    }
+    applySpecialState();
+    setMeta(scopeMeta());
+    syncScopeBtn();
     document.documentElement.classList.add('bfonly-replace');
     await loadFeed(false);
     keepPanelAlive();
@@ -681,7 +759,7 @@
           return;
         }
         following = await loadFollowing(nav);
-        specialUnavailable = !!(cfg.specialOnly && !following.special.size);
+        applySpecialState();
         startFilter();
       } catch (e) {
         var chip = h('div', 'bfonly-chip warn');
@@ -692,13 +770,48 @@
     })();
   }
 
+  /* 三种降级状态的统一判定 */
+  function applySpecialState() {
+    specialUnavailable = false;
+    specialEmpty = false;
+    specialReason = '';
+    if (!cfg.specialOnly || !following) return;
+    if (following.special.size) return;              // 命中，正常工作
+    if (following.specialOk === false) {
+      specialUnavailable = true;
+      specialReason = following.specialDetail || '分组接口未返回';
+    } else {
+      specialEmpty = true;                          // 接口成功，但账号确实没设特别关注
+    }
+  }
+
   /* ---------------- 启动 & 监听 ---------------- */
 
   boot(false);
 
   try {
-    chrome.runtime.onMessage.addListener(function (msg) {
-      if (!msg || msg.type !== 'bfonly:refresh') return;
+    chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+      if (!msg) return;
+      if (msg.type === 'bfonly:ping') {
+        // popup 用它判断页面里的内容脚本是不是最新版，避免「开关有了、脚本没换」
+        sendResponse({
+          version: FEED_VERSION,
+          enabled: !!cfg.enabled,
+          mode: cfg.mode,
+          specialOnly: !!cfg.specialOnly,
+          followCount: following ? following.total : 0,
+          specialCount: following ? following.special.size : 0,
+          specialResolved: following ? !!following.specialResolved : false,
+          specialSource: following ? following.specialSource : '',
+          specialDetail: following ? following.specialDetail : '',
+          specialUnavailable: specialUnavailable,
+          specialEmpty: specialEmpty,
+          specialReason: specialReason,
+          status: status
+        });
+        return;
+      }
+      if (msg.type !== 'bfonly:refresh') return;
       if (msg.hard) { location.reload(); return; }
       teardown();
       started = false;

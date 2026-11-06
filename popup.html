@@ -13,8 +13,13 @@
       <h1>只看关注</h1>
       <p>首页只留你关注的 UP 主</p>
     </div>
-    <span class="ver">v1.1</span>
+    <span class="ver">v1.1.1</span>
   </header>
+
+  <div class="fixbar" id="fixBar" hidden>
+    <div class="fixbar-text" id="fixText"></div>
+    <button type="button" class="fixbar-btn" id="fixBtn">一键修复</button>
+  </div>
 
   <section class="row main-switch">
     <div class="row-text">
@@ -59,6 +64,8 @@
     <button type="button" id="refreshBtn" class="btn primary">刷新关注列表</button>
     <button type="button" id="openBtn" class="btn">打开 B 站首页</button>
   </section>
+
+  <div class="diag" id="diagText">页面状态：等待 B 站首页响应…</div>
 
   <footer class="foot">
     <span id="hint">需要登录 B 站才能读取关注列表</span>

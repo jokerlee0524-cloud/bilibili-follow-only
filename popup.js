@@ -1,10 +1,12 @@
-/* popup 逻辑：读写配置 + 展示关注缓存状态 */
+/* popup 逻辑：读写配置 + 特别关注诊断 + 内容脚本版本自愈 */
 (function () {
   'use strict';
 
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
   var DEFAULTS = { enabled: true, mode: 'replace', specialOnly: false };
+  var EXT_VER = chrome.runtime.getManifest().version;
+  var BILI_URLS = ['https://www.bilibili.com/*', 'https://bilibili.com/*'];
 
   var elEnabled = document.getElementById('enabled');
   var elState = document.getElementById('stateText');
@@ -16,11 +18,16 @@
   var elSpecial = document.getElementById('specialOnly');
   var elSpecialText = document.getElementById('specialText');
   var elSpecialRow = document.getElementById('specialRow');
+  var elFixBar = document.getElementById('fixBar');
+  var elFixText = document.getElementById('fixText');
+  var elFixBtn = document.getElementById('fixBtn');
+  var elDiag = document.getElementById('diagText');
   var btnRefresh = document.getElementById('refreshBtn');
   var btnOpen = document.getElementById('openBtn');
 
   var cfg = Object.assign({}, DEFAULTS);
   var follow = null;
+  var diag = null;   // 内容脚本 ping 回来的现场状态
 
   function ago(ts) {
     if (!ts) return '尚未同步';
@@ -31,9 +38,11 @@
     return Math.round(s / 86400) + ' 天前同步';
   }
 
+  /* 特别关注数量：优先用分组接口解析出来的 specialMids */
   function countSpecial() {
-    if (!follow) return 0;
+    if (!follow) return null;
     if (Array.isArray(follow.specialMids)) return follow.specialMids.length;
+    if (!follow.specialResolved) return null;   // 旧缓存，没解析过
     if (!follow.list) return 0;
     return follow.list.filter(function (u) {
       var tagged = Array.isArray(u.tag) && u.tag.some(function (t) { return Number(t) === -10; });
@@ -48,9 +57,10 @@
     elSpecialRow.classList.toggle('off', !cfg.enabled);
 
     var n = countSpecial();
-    elSpecialText.textContent = n > 0
-      ? '仅显示设为特别关注的 ' + n + ' 位 UP 主'
-      : '仅显示设为特别关注的 UP 主';
+    elSpecialText.textContent = n === null
+      ? '仅显示设为特别关注的 UP 主（尚未读取）'
+      : n > 0 ? '仅显示设为特别关注的 ' + n + ' 位 UP 主'
+              : '你还没有设置特别关注，先去 B 站设置一下';
 
     Array.prototype.forEach.call(elSeg.querySelectorAll('.seg-btn'), function (b) {
       b.classList.toggle('active', b.dataset.mode === cfg.mode);
@@ -77,8 +87,68 @@
       elFoot.classList.add('warn');
     }
 
+    renderDiag();
     btnRefresh.disabled = false;
     btnRefresh.textContent = '刷新关注列表';
+  }
+
+  function renderDiag() {
+    if (!elDiag) return;
+    if (!diag) { elDiag.textContent = '页面状态：等待 B 站首页响应…'; return; }
+    var bits = ['页面脚本 v' + diag.version];
+    if (diag.specialOnly) {
+      if (diag.specialUnavailable) bits.push('⚠ 特别关注读取失败：' + (diag.specialReason || '未知'));
+      else if (diag.specialEmpty) bits.push('★ 账号未设置特别关注');
+      else bits.push('★ 命中 ' + diag.specialCount + ' 位特别关注');
+      if (diag.specialSource) bits.push('来源 ' + diag.specialSource);
+    } else {
+      bits.push('范围：全部关注（' + diag.followCount + ' 位）');
+    }
+    elDiag.textContent = bits.join(' · ');
+  }
+
+  function showFix(text) {
+    if (!elFixBar) return;
+    elFixBar.hidden = false;
+    elFixText.textContent = text;
+  }
+
+  function hideFix() {
+    if (elFixBar) elFixBar.hidden = true;
+  }
+
+  /* 版本握手：popup 每次打开都现读磁盘，但页面里的内容脚本可能是旧版，
+   * 这正是「开关出现了、过滤没生效」的典型原因。检测出来就给一键修复。 */
+  function probeContentScript() {
+    chrome.tabs.query({ url: BILI_URLS }, function (tabs) {
+      var t = (tabs || [])[0];
+      if (!t) {
+        diag = null;
+        renderDiag();
+        if (elDiag) elDiag.textContent = '页面状态：未打开 B 站首页（打开后自动生效）';
+        hideFix();
+        return;
+      }
+      var attempt = 0;
+      function ping() {
+        chrome.tabs.sendMessage(t.id, { type: 'bfonly:ping' }, function (r) {
+          void chrome.runtime.lastError;
+          if ((!r || !r.version) && attempt++ < 2) { setTimeout(ping, 1200); return; }
+          if (!r || !r.version) {
+            showFix('页面里的脚本没有响应，可能还没刷新过 B 站首页');
+            return;
+          }
+          if (r.version !== EXT_VER) {
+            showFix('页面脚本是 v' + r.version + '，扩展是 v' + EXT_VER + '，需要重载扩展才能生效');
+            return;
+          }
+          hideFix();
+          diag = r;
+          renderDiag();
+        });
+      }
+      ping();
+    });
   }
 
   function load() {
@@ -86,6 +156,7 @@
       cfg = Object.assign({}, DEFAULTS, (r && r[CFG_KEY]) || {});
       follow = (r && r[FOLLOW_KEY]) || null;
       render();
+      probeContentScript();
     });
   }
 
@@ -110,14 +181,15 @@
     cfg.enabled = elEnabled.checked;
     saveCfg();
     render();
-    reloadBiliTabs();
+    reloadBiliTabs(true);
   });
 
   elSpecial.addEventListener('change', function () {
     cfg.specialOnly = elSpecial.checked;
     saveCfg();
     render();
-    // 不主动 reloadBiliTabs：内容脚本监听 storage.onChanged 后会自行重建，避免重复初始化
+    // 不指望 storage.onChanged：直接刷新 B 站标签页，让新范围立刻生效
+    reloadBiliTabs(true);
   });
 
   elSeg.addEventListener('click', function (e) {
@@ -126,8 +198,19 @@
     cfg.mode = btn.dataset.mode;
     saveCfg();
     render();
-    reloadBiliTabs();
+    reloadBiliTabs(true);
   });
+
+  if (elFixBtn) {
+    elFixBtn.addEventListener('click', function () {
+      elFixBtn.disabled = true;
+      elFixBtn.textContent = '修复中…';
+      chrome.runtime.sendMessage({ type: 'bfonly:reloadExt' }, function () {
+        void chrome.runtime.lastError;
+        window.close();
+      });
+    });
+  }
 
   btnRefresh.addEventListener('click', function () {
     btnRefresh.disabled = true;
@@ -146,15 +229,20 @@
     chrome.tabs.create({ url: 'https://www.bilibili.com/' });
   });
 
-  // 让已打开的 B 站首页立刻重新加载内容脚本的结果
+  // hard：直接刷新标签页。页面重新注入内容脚本（磁盘上的最新版）并读回新配置，
+  // 不依赖旧脚本是否还活着，也不依赖 storage.onChanged 是否投递成功。
   function reloadBiliTabs(hard) {
-    chrome.tabs.query({ url: ['https://www.bilibili.com/*'] }, function (tabs) {
+    chrome.tabs.query({ url: BILI_URLS }, function (tabs) {
       void chrome.runtime.lastError;
       (tabs || []).forEach(function (t) {
         try {
-          chrome.tabs.sendMessage(t.id, { type: 'bfonly:refresh', hard: !!hard }, function () {
-            void chrome.runtime.lastError;
-          });
+          if (hard) {
+            chrome.tabs.reload(t.id);
+          } else {
+            chrome.tabs.sendMessage(t.id, { type: 'bfonly:refresh', hard: false }, function () {
+              void chrome.runtime.lastError;
+            });
+          }
         } catch (e) { /* 忽略 */ }
       });
     });

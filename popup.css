@@ -205,6 +205,44 @@ body {
 
 .btn:disabled { opacity: 0.6; cursor: default; }
 
+/* ---------- 版本自愈提示 ---------- */
+.fixbar {
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid #ffc9d8;
+  background: #fff5f8;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fixbar[hidden] { display: none; }
+.fixbar-text { flex: 1; font-size: 11px; color: #c14a70; line-height: 1.45; }
+
+.fixbar-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 6px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.fixbar-btn:disabled { opacity: 0.6; cursor: default; }
+
+.diag {
+  margin-top: 12px;
+  font-size: 10.5px;
+  color: #8a9099;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
 /* ---------- 底部 ---------- */
 .foot {
   margin-top: 12px;

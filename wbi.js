@@ -1,5 +1,13 @@
 /* B 站接口封装：wbi 签名 + 关注列表 + 特别关注分组 + 关注动态流
- * 运行在 bilibili.com 页面内（内容脚本），fetch 自带登录 Cookie。
+ *
+ * 运行在 bilibili.com 页面内（内容脚本）。请求走「页面直连 → Service Worker 代理」双通道：
+ * 老接口（/x/relation/tags、/x/relation/tag）部分账号没有 CORS 头，页面直连会被浏览器拦掉，
+ * 此时由 bg.js 代发（扩展有 host_permissions，不受页面 CORS 约束）。
+ *
+ * 「特别关注」的权威来源是分组 tagid = -10：
+ *   /x/relation/tags          → 确认分组存在（tagid 恒为 -10）
+ *   /x/relation/tag?tagid=-10 → 分页取成员 mid
+ * /x/relation/followings 里的 special / tag 字段只作为补充证据，不再当作唯一来源。
  */
 (function () {
   'use strict';
@@ -15,10 +23,10 @@
   var keyCache = { imgKey: '', subKey: '', ts: 0 };
 
   var DEV = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  var RISK_CODES = [-403, -352, -509, -412]; // 风控 / 签名不过，值得换通道重试
 
   /* 关系列表里的「特别关注」标记：
    *   special === 1 / true，或 tag 数组里含 -10（特别关注分组恒为 -10）。
-   * 两种写法都认，B 站不同版本返回过其中一种。
    */
   function isSpecial(u) {
     if (!u) return 0;
@@ -37,6 +45,8 @@
     return out.slice(0, 32);
   }
 
+  /* 对「全部」查询参数做 wbi 签名。
+   * 注意：所有会随请求发出的参数都必须进 signQuery，否则服务端重算 w_rid 会对不上。 */
   function signQuery(params, imgKey, subKey) {
     var mixin = mixinKey(imgKey + subKey);
     var p = Object.assign({}, params);
@@ -60,40 +70,60 @@
     return { imgKey: img, subKey: sub };
   }
 
-  async function jget(url) {
-    var res = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json, text/plain, */*' }
+  /* Service Worker 代理：内容脚本直连失败时的第二通道 */
+  function proxyFetch(url) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(null); } }, 8000);
+      try {
+        chrome.runtime.sendMessage({ type: 'bfonly:fetch', url: url }, function (r) {
+          void chrome.runtime.lastError;
+          if (done) return;
+          done = true; clearTimeout(timer);
+          resolve(r && r.ok ? r.json : null);
+        });
+      } catch (e) {
+        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+      }
     });
-    if (!res.ok) {
-      var err = new Error('HTTP ' + res.status);
-      err.httpStatus = res.status;
-      throw err;
-    }
-    var data = await res.json();
-    if (data && typeof data.code === 'number' && data.code !== 0) {
-      var e = new Error('API ' + data.code + ' ' + (data.message || ''));
-      e.apiCode = data.code;
-      throw e;
-    }
-    return data;
   }
 
-  /* 原样取 JSON，不校验 code —— nav 接口未登录时返回 -101，属于正常状态而非错误 */
-  async function jgetRaw(url) {
-    var res = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json, text/plain, */*' }
-    });
-    if (!res.ok) {
-      var err = new Error('HTTP ' + res.status);
-      err.httpStatus = res.status;
-      throw err;
-    }
-    return res.json();
+  /* 取 JSON：直连 → 风控/网络失败 → 代理；代理也拿不到就抛最后一次错误 */
+  async function rawGet(url) {
+    var last = null;
+    try {
+      var res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json, text/plain, */*' }
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var j = await res.json();
+      if (j && RISK_CODES.indexOf(j.code) >= 0) {
+        last = new Error('API ' + j.code + '（疑似风控）');
+      } else {
+        return j;
+      }
+    } catch (e) { last = e; }
+
+    var proxied = await proxyFetch(url);
+    if (proxied) return proxied;
+    throw last || new Error('请求失败');
   }
+
+  function jget(url) {
+    return rawGet(url).then(function (data) {
+      if (data && typeof data.code === 'number' && data.code !== 0) {
+        var e = new Error('API ' + data.code + ' ' + (data.message || ''));
+        e.apiCode = data.code;
+        throw e;
+      }
+      return data;
+    });
+  }
+
+  /* 原样取 JSON，不校验 code —— nav 未登录返回 -101，属于正常状态 */
+  function jgetRaw(url) { return rawGet(url); }
 
   /* 登录态 + wbi 密钥 */
   async function getNav() {
@@ -125,79 +155,110 @@
     return nav.keys;
   }
 
-  /* 关注列表（分页拉全） */
+  /* 关注列表（分页拉全）。tag / special 字段原样保留，供上层判定特别关注。 */
   async function getFollowing(mid, onProgress) {
     if (DEV) {
       var mock = await jget(location.origin + '/mock/followings.json');
       var list = ((mock.data && mock.data.list) || []).map(function (u) {
-        return { mid: String(u.mid), uname: u.uname, face: u.face, special: isSpecial(u) };
+        return { mid: String(u.mid), uname: u.uname, face: u.face,
+                 special: isSpecial(u), tag: Array.isArray(u.tag) ? u.tag : null };
       });
       if (onProgress) onProgress(list.length, list.length);
-      return { total: list.length, list: list };
+      return { total: list.length, list: list, specialSeen: list.some(function (u) {
+        return typeof u.special !== 'undefined' || Array.isArray(u.tag);
+      }) };
     }
 
     var keys = await ensureKeys();
     var all = [];
     var total = 0;
+    var specialSeen = false;
     for (var pn = 1; pn <= 20; pn++) {
-      var q = signQuery({ vmid: mid, pn: pn, ps: 50, order: 'desc', order_type: 'attention' }, keys.imgKey, keys.subKey);
+      var q = signQuery({ vmid: mid, pn: pn, ps: 50, order_type: 'attention' }, keys.imgKey, keys.subKey);
       var res = await jget('https://api.bilibili.com/x/relation/followings?' + q);
       var d = res.data || {};
       total = d.total || total;
       var batch = (d.list || []).map(function (u) {
-        return { mid: String(u.mid), uname: u.uname, face: u.face, special: isSpecial(u) };
+        if (typeof u.special !== 'undefined' || Array.isArray(u.tag)) specialSeen = true;
+        return { mid: String(u.mid), uname: u.uname, face: u.face,
+                 special: isSpecial(u), tag: Array.isArray(u.tag) ? u.tag : null };
       });
       all = all.concat(batch);
       if (onProgress) onProgress(all.length, total);
       if (batch.length < 50 || all.length >= total) break;
     }
-    return { total: total, list: all };
+    return { total: total, list: all, specialSeen: specialSeen };
   }
 
-  /* 特别关注成员（兜底通道）
+  /* 特别关注成员（权威通道）
    *
-   * 主通道是 x/relation/followings 里的 special 字段 / tag 含 -10，零额外请求。
-   * 当字段缺失（B 站改版、旧缓存、隐私设置）时走这里：
-   *   /x/relation/tags          → 找到「特别关注」分组（tagid 恒为 -10）
-   *   /x/relation/tag?tagid=-10 → 分页取该分组下的 mid
-   * 该接口部分账号需要 wbi 签名，所以失败时自动用签名参数重试一次。
+   * 返回 { mids, source, ok, detail }：
+   *   ok     = 接口确实成功返回（哪怕 mids 为空，表示这个账号真的没设特别关注）
+   *   source = 'group'（分组接口）/ 'relations'（关系字段）/ 'mock' / ''
+   *   detail = 失败原因，直接显示在插件面板里，方便定位
+   *
+   * 依次尝试：签名版 tags → 无签名 tags → 签名版 tag(-10) → 无签名 tag(-10)。
+   * tags 只是用来确认分组，拿不到也照样直试 tagid=-10（B 站恒为 -10）。
    */
   async function getSpecialFollowings() {
     if (DEV) {
       var mock = await jgetRaw(location.origin + '/mock/special.json');
       var arr = (mock && mock.data) || [];
       if (!Array.isArray(arr)) arr = arr.list || [];
-      return arr.map(function (u) { return String(u.mid); }).filter(Boolean);
+      return {
+        mids: arr.map(function (u) { return String(u.mid); }).filter(Boolean),
+        source: 'mock', ok: true, detail: ''
+      };
     }
 
-    var tagsRes = await jgetRaw('https://api.bilibili.com/x/relation/tags');
-    var tags = (tagsRes && tagsRes.data) || [];
-    if (!Array.isArray(tags)) tags = tags.tags || [];
-    var group = null;
-    for (var i = 0; i < tags.length; i++) {
-      if (Number(tags[i].tagid) === -10 || tags[i].name === '特别关注') {
-        group = tags[i];
-        break;
+    var keys = null;
+    try { keys = await ensureKeys(); } catch (e) { /* 无密钥时退化为无签名请求 */ }
+
+    var notes = [];
+    var tagUrl = 'https://api.bilibili.com/x/relation/tags';
+
+    // 1) 确认特别关注分组（失败不阻断，继续直试 -10）
+    try {
+      var tagsRes = await jgetRaw(keys
+        ? tagUrl + '?' + signQuery({}, keys.imgKey, keys.subKey)
+        : tagUrl);
+      if (tagsRes && tagsRes.code === 0) {
+        var tags = (tagsRes.data) || [];
+        if (!Array.isArray(tags)) tags = tags.tags || [];
+        notes.push('分组列表 OK(' + tags.length + ')');
+      } else {
+        notes.push('分组列表 code=' + (tagsRes && tagsRes.code));
+        var tagsRes2 = await jgetRaw(tagUrl);
+        if (tagsRes2 && tagsRes2.code === 0) notes.push('分组列表(无签名) OK');
+        else notes.push('分组列表(无签名) code=' + (tagsRes2 && tagsRes2.code));
       }
+    } catch (e) {
+      notes.push('分组列表 异常:' + (e && e.message ? e.message : e));
     }
-    if (!group) return [];
 
+    // 2) 取分组下成员，全参数签名
     var out = [];
+    var ok = false;
+    var lastCode = null;
     for (var pn = 1; pn <= 10; pn++) {
-      var base = 'https://api.bilibili.com/x/relation/tag?tagid=' +
-        encodeURIComponent(String(group.tagid)) + '&pn=' + pn + '&ps=50';
+      var params = { tagid: -10, pn: pn, ps: 50 };
+      var signed = keys ? signQuery(params, keys.imgKey, keys.subKey)
+                        : 'tagid=-10&pn=' + pn + '&ps=50';
+      var candidates = keys
+        ? [signed, 'tagid=-10&pn=' + pn + '&ps=50']
+        : ['tagid=-10&pn=' + pn + '&ps=50'];
+
       var res = null;
-      try {
-        res = await jgetRaw(base);
-      } catch (e) { res = null; }
-      if (!res || res.code !== 0) {
-        // 换带 wbi 签名的版本再试一次
+      for (var c = 0; c < candidates.length; c++) {
         try {
-          var keys = await ensureKeys();
-          res = await jgetRaw(base + '&' + signQuery({}, keys.imgKey, keys.subKey));
-        } catch (e2) { res = null; }
+          var r = await jgetRaw('https://api.bilibili.com/x/relation/tag?' + candidates[c]);
+          if (r && r.code === 0) { res = r; break; }
+          lastCode = r ? r.code : 'null';
+        } catch (e2) { lastCode = 'ERR:' + (e2 && e2.message ? e2.message : e2); }
       }
       if (!res || res.code !== 0) break;
+
+      ok = true;
       var page = res.data;
       if (!Array.isArray(page)) page = (page && page.list) || [];
       for (var j = 0; j < page.length; j++) {
@@ -205,7 +266,16 @@
       }
       if (page.length < 50) break;
     }
-    return out;
+
+    if (ok) notes.push('成员接口 OK(' + out.length + ')');
+    else notes.push('成员接口 失败 code=' + lastCode);
+
+    return {
+      mids: out,
+      source: ok ? 'group' : '',
+      ok: ok,
+      detail: notes.join(' / ')
+    };
   }
 
   /* 关注动态流（只要视频），无限翻页 */

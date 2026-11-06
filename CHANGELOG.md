@@ -2,6 +2,36 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.1.1] — 2026-11-06
+
+### 修复（实测「开了特别关注却没进一步过滤」）
+
+- **旧缓存短路**：1.1.0 只要缓存里的关注对象带 `special` 字段（哪怕全是 `0`）就认定「特别关注信息齐全」，
+  直接复用 12 小时缓存，分组接口兜底永远不会被调用。改为只认新标记 `specialResolved`，
+  且特别关注集合独立缓存 30 分钟；**打开开关时必定重新解析一次**。
+- **wbi 签名不全**：兜底请求把 `tagid / pn / ps` 拼在签名串外面，服务端重算 `w_rid` 必然对不上。
+  改为所有参数统一进 `signQuery`，并先走签名版、失败再退无签名版。
+- **CORS / 风控**：`/x/relation/tags` 与 `/x/relation/tag` 老接口在部分账号下没有跨域头，
+  页面直连会静默失败。新增 Service Worker 代理通道（`bg.js`），直连失败或返回风控码时自动代发。
+- **开关不落地**：popup 的每次改动不再只依赖 `storage.onChanged`，直接刷新已打开的 B 站标签页；
+  内容脚本无响应时也由浏览器兜底刷新。
+- **版本错配**：新增内容脚本版本握手（`bfonly:ping`）。弹窗检测到页面脚本仍是旧版时显示
+  「一键修复」，自动重载扩展并刷新页面 —— 这正是「选项加上了、实测没过滤」的直接原因。
+
+### 改进
+
+- 分组接口 `tagid = -10` 改为**权威来源**，关系列表的 `special` / `tag` 降级为补充证据
+- 明确区分「接口失败」和「账号没设特别关注」，前者带返回码 + 重试按钮，后者给设置引导
+- 面板标题 / 副标题 / 过滤胶囊随范围变化：`★ 只看特别关注 · SPECIAL ONLY`，并直接显示命中位数
+- 弹窗显示现场诊断：页面脚本版本、特别关注位数、数据来源、失败原因
+- 切换模式 / 范围 / 刷新时统一走标签页刷新，避免旧脚本残留
+
+### 验证
+
+- 本地夹具：关注流 8 → 4 张、仅过滤 3 → 2 张、字段缺失走分组兜底、分组失败降级、popup 联动
+- 真实接口探测：`/x/relation/tags`、`/x/relation/tag?tagid=-10`、`/x/relation/followings` 路由有效
+- 未登录态返回 `code:-101`，扩展会明确提示而不是静默按全部关注显示
+
 ## [1.1.0] — 2026-11-06
 
 ### 新增
@@ -60,3 +90,4 @@
 
 [1.0.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.1.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
+[1.1.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
