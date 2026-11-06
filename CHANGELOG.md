@@ -2,6 +2,34 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.2.0] — 2026-11-06
+
+### 新增：首页上下分区（默认模式）
+
+- 首页注入面板拆成两块：**上半区「★ 特别关注」/ 下半区「◇ 其它关注」**，中间虚线分隔，
+  粉色 / 蓝色左边框区分
+- 每块头部显示标题、UP 主数与视频条数，并列出该区出现过的 UP 主头像（去重，最多 8 个），
+  **点头像直接进个人空间**
+- 数据来自同一条关注动态流按作者切分，**零额外请求**；特别关注视频稀疏时自动多翻页凑够上半区
+- 读不到特别关注 / 账号没设特别关注时，上半区给引导卡 + 「重试」，下半区照常显示全部关注，不白屏
+- 弹窗模式区从 2 个按钮扩到 3 个（上下分区 / 关注流 / 仅过滤），首页面板右上角按钮同步改成三态循环
+- 分区模式下「只看特别关注」开关自动禁用并说明原因（两块本来就同时显示），
+  避免旧配置 `specialOnly=true` 把下半区藏掉
+- `onInstalled` 升级迁移：老用户的「关注流」一次性平滑切到「上下分区」，并强制展开两块；
+  只迁一次，之后手动切的模式不会被改
+
+### 变更
+
+- 默认 `mode` 由 `replace` 改为 `split`；版本号 1.2.0，内容脚本版本握手同步
+- 副标题改为给出两块各自的条数与 UP 主数；foot / 胶囊 / 弹窗诊断同步新布局
+
+### 验证（`D:/AI/tmp/cdp_verify_120.js`，19 项断言全过、0 报错）
+
+- 分区：上 4 张全部来自特别关注 UP、下 4 张全部来自其它关注 UP、顺序与头像条正确
+- 旧配置 `specialOnly=true` 不破坏两块；分组接口失败时上半区引导卡 + 下半区 8 张
+- 回归：关注流 8 张 / 只看特别关注 4 张、仅过滤留 2 张、三态循环 split→replace→filter→split
+- 弹窗三模式与默认高亮、范围开关禁用、版本诊断；真实 B 站首页注入 v1.2.0
+
 ## [1.1.1] — 2026-11-06
 
 ### 修复（实测「开了特别关注却没进一步过滤」）
@@ -91,3 +119,4 @@
 [1.0.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.1.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.1.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
+[1.2.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main

@@ -2,14 +2,26 @@
 'use strict';
 
 var CFG_KEY = 'bfonly_cfg';
-var DEFAULTS = { enabled: true, mode: 'replace', specialOnly: false };
+var DEFAULTS = { enabled: true, mode: 'split', specialOnly: false };
 
-chrome.runtime.onInstalled.addListener(function () {
+chrome.runtime.onInstalled.addListener(function (detail) {
   chrome.storage.local.get([CFG_KEY], function (r) {
-    if (!r || !r[CFG_KEY]) {
+    var cur = (r && r[CFG_KEY]) || null;
+    if (!cur) {
       var o = {};
       o[CFG_KEY] = DEFAULTS;
       chrome.storage.local.set(o);
+      return;
+    }
+    // 1.2.0 升级：老用户从「关注流」平滑迁到「上下分区」，且两块默认都展开。
+    // 只做一次；用户之后手动切回任何模式都不会再被改。
+    if (detail && detail.reason === 'update' && !cur.splitMigrated) {
+      cur.splitMigrated = true;
+      if (cur.mode === 'replace') cur.mode = 'split';
+      if (cur.mode === 'split') cur.specialOnly = false;
+      var u = {};
+      u[CFG_KEY] = cur;
+      chrome.storage.local.set(u);
     }
   });
 });

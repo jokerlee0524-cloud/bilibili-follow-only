@@ -4,7 +4,7 @@
 
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
-  var DEFAULTS = { enabled: true, mode: 'replace', specialOnly: false };
+  var DEFAULTS = { enabled: true, mode: 'split', specialOnly: false };
   var EXT_VER = chrome.runtime.getManifest().version;
   var BILI_URLS = ['https://www.bilibili.com/*', 'https://bilibili.com/*'];
 
@@ -51,14 +51,16 @@
   }
 
   function render() {
+    var isSplit = cfg.mode === 'split';
     elEnabled.checked = !!cfg.enabled;
     elSpecial.checked = !!cfg.specialOnly;
-    elSpecial.disabled = !cfg.enabled;
-    elSpecialRow.classList.toggle('off', !cfg.enabled);
+    elSpecial.disabled = !cfg.enabled || isSplit;
+    elSpecialRow.classList.toggle('off', !cfg.enabled || isSplit);
 
     var n = countSpecial();
-    elSpecialText.textContent = n === null
-      ? '仅显示设为特别关注的 UP 主（尚未读取）'
+    elSpecialText.textContent = isSplit
+      ? '分区模式上下两块都显示，无需此开关'
+      : n === null ? '仅显示设为特别关注的 UP 主（尚未读取）'
       : n > 0 ? '仅显示设为特别关注的 ' + n + ' 位 UP 主'
               : '你还没有设置特别关注，先去 B 站设置一下';
 
@@ -69,12 +71,14 @@
 
     if (!cfg.enabled) {
       elState.textContent = '已关闭，首页保持 B 站原样';
+    } else if (isSplit) {
+      elState.textContent = '首页分成两块：上★特别关注 / 下其它关注';
     } else if (cfg.mode === 'replace') {
       elState.textContent = '首页已替换为「只看关注」视频流';
     } else {
       elState.textContent = '保留原首页，仅隐藏非关注内容';
     }
-    if (cfg.enabled && cfg.specialOnly) elState.textContent += ' · 仅特别关注';
+    if (cfg.enabled && cfg.specialOnly && !isSplit) elState.textContent += ' · 仅特别关注';
 
     elCount.textContent = follow && follow.list && follow.list.length ? follow.list.length : '—';
     elCache.textContent = follow ? ago(follow.ts) : '尚未同步';
@@ -96,7 +100,11 @@
     if (!elDiag) return;
     if (!diag) { elDiag.textContent = '页面状态：等待 B 站首页响应…'; return; }
     var bits = ['页面脚本 v' + diag.version];
-    if (diag.specialOnly) {
+    var modeName = { split: '上下分区', replace: '关注流', filter: '仅过滤' }[diag.mode] || diag.mode;
+    bits.push('模式 ' + modeName);
+    if (diag.mode === 'split') {
+      bits.push('两块同时显示（特别关注 ' + diag.specialCount + ' 位）');
+    } else if (diag.specialOnly) {
       if (diag.specialUnavailable) bits.push('⚠ 特别关注读取失败：' + (diag.specialReason || '未知'));
       else if (diag.specialEmpty) bits.push('★ 账号未设置特别关注');
       else bits.push('★ 命中 ' + diag.specialCount + ' 位特别关注');
@@ -185,6 +193,7 @@
   });
 
   elSpecial.addEventListener('change', function () {
+    if (cfg.mode === 'split') { render(); return; }
     cfg.specialOnly = elSpecial.checked;
     saveCfg();
     render();

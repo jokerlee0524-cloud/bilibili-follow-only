@@ -176,6 +176,102 @@ html.bfonly-replace #i_cecream .bili-feed4 .bili-video-card-skeleton {
 
 .bfonly-hint.warn { color: var(--bfonly-pink); }
 
+/* ---------- 分区模式：上★特别关注 / 下其它关注 ---------- */
+.bfonly-grid.bfonly-sections { display: block; }
+
+.bfonly-section + .bfonly-section {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px dashed var(--bfonly-line);
+}
+
+.bfonly-section-head { margin-bottom: 14px; }
+
+.bfonly-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bfonly-text);
+}
+
+.bfonly-section-icon { font-size: 15px; }
+.bfonly-section-special .bfonly-section-icon { color: var(--bfonly-pink); }
+.bfonly-section-others .bfonly-section-icon { color: var(--bfonly-blue); }
+
+.bfonly-section-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--bfonly-sub);
+}
+
+.bfonly-section-special { border-left: 3px solid rgba(251, 114, 153, 0.55); padding-left: 14px; }
+.bfonly-section-others  { border-left: 3px solid rgba(0, 174, 236, 0.45);  padding-left: 14px; }
+
+.bfonly-up-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bfonly-up-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 168px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--bfonly-line);
+  border-radius: 999px;
+  background: var(--bfonly-soft);
+  color: var(--bfonly-text);
+  font-size: 11.5px;
+  text-decoration: none;
+  transition: border-color 0.16s ease, color 0.16s ease;
+}
+
+.bfonly-up-chip:hover { border-color: var(--bfonly-pink); color: var(--bfonly-pink); }
+
+.bfonly-up-face {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.bfonly-up-face.ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bfonly-pink);
+  color: #fff;
+  font-size: 11px;
+}
+
+.bfonly-up-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bfonly-section-empty,
+.bfonly-section-guide {
+  padding: 18px;
+  border: 1px dashed var(--bfonly-line);
+  border-radius: 8px;
+  background: var(--bfonly-soft);
+  color: var(--bfonly-sub);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.bfonly-section-guide-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bfonly-text);
+  margin-bottom: 6px;
+}
+
+.bfonly-section-guide-text { margin-bottom: 10px; }
+
 /* ---------- 卡片网格 ---------- */
 .bfonly-grid {
   display: grid;
