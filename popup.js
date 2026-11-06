@@ -4,7 +4,7 @@
 
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
-  var DEFAULTS = { enabled: true, mode: 'replace' };
+  var DEFAULTS = { enabled: true, mode: 'replace', specialOnly: false };
 
   var elEnabled = document.getElementById('enabled');
   var elState = document.getElementById('stateText');
@@ -13,6 +13,9 @@
   var elHint = document.getElementById('hint');
   var elFoot = document.querySelector('.foot');
   var elSeg = document.getElementById('modeSeg');
+  var elSpecial = document.getElementById('specialOnly');
+  var elSpecialText = document.getElementById('specialText');
+  var elSpecialRow = document.getElementById('specialRow');
   var btnRefresh = document.getElementById('refreshBtn');
   var btnOpen = document.getElementById('openBtn');
 
@@ -28,8 +31,26 @@
     return Math.round(s / 86400) + ' 天前同步';
   }
 
+  function countSpecial() {
+    if (!follow) return 0;
+    if (Array.isArray(follow.specialMids)) return follow.specialMids.length;
+    if (!follow.list) return 0;
+    return follow.list.filter(function (u) {
+      var tagged = Array.isArray(u.tag) && u.tag.some(function (t) { return Number(t) === -10; });
+      return u.special === 1 || u.special === true || tagged;
+    }).length;
+  }
+
   function render() {
     elEnabled.checked = !!cfg.enabled;
+    elSpecial.checked = !!cfg.specialOnly;
+    elSpecial.disabled = !cfg.enabled;
+    elSpecialRow.classList.toggle('off', !cfg.enabled);
+
+    var n = countSpecial();
+    elSpecialText.textContent = n > 0
+      ? '仅显示设为特别关注的 ' + n + ' 位 UP 主'
+      : '仅显示设为特别关注的 UP 主';
 
     Array.prototype.forEach.call(elSeg.querySelectorAll('.seg-btn'), function (b) {
       b.classList.toggle('active', b.dataset.mode === cfg.mode);
@@ -43,6 +64,7 @@
     } else {
       elState.textContent = '保留原首页，仅隐藏非关注内容';
     }
+    if (cfg.enabled && cfg.specialOnly) elState.textContent += ' · 仅特别关注';
 
     elCount.textContent = follow && follow.list && follow.list.length ? follow.list.length : '—';
     elCache.textContent = follow ? ago(follow.ts) : '尚未同步';
@@ -89,6 +111,13 @@
     saveCfg();
     render();
     reloadBiliTabs();
+  });
+
+  elSpecial.addEventListener('change', function () {
+    cfg.specialOnly = elSpecial.checked;
+    saveCfg();
+    render();
+    // 不主动 reloadBiliTabs：内容脚本监听 storage.onChanged 后会自行重建，避免重复初始化
   });
 
   elSeg.addEventListener('click', function (e) {

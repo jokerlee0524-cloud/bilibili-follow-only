@@ -166,6 +166,16 @@ html.bfonly-replace #i_cecream .bili-feed4 .bili-video-card-skeleton {
   cursor: default;
 }
 
+/* 「只看特别关注」范围开关：激活时粉色高亮，和普通按钮一眼能分开 */
+.bfonly-btn.bfonly-scope-btn.active {
+  border-color: var(--bfonly-pink);
+  color: var(--bfonly-pink);
+  background: rgba(251, 114, 153, 0.10);
+  font-weight: 600;
+}
+
+.bfonly-hint.warn { color: var(--bfonly-pink); }
+
 /* ---------- 卡片网格 ---------- */
 .bfonly-grid {
   display: grid;
@@ -337,7 +347,9 @@ html[data-theme='dark'] .bfonly-up { color: #aeb3b9; }
   z-index: 99999;
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(440px, calc(100vw - 40px));
   padding: 9px 12px 9px 14px;
   background: rgba(24, 25, 28, 0.9);
   color: #fff;
@@ -370,6 +382,9 @@ html[data-theme='dark'] .bfonly-up { color: #aeb3b9; }
   .bfonly-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 16px 12px; }
   .bfonly-panel { padding: 14px; }
   .bfonly-title { font-size: 17px; }
-  .bfonly-head-right { display: none; }
+  /* 窄屏仍保留「特别关注」开关，只把按钮收紧换行 */
+  .bfonly-head { flex-wrap: wrap; }
+  .bfonly-head-right { flex-wrap: wrap; }
+  .bfonly-head-right .bfonly-btn { padding: 7px 10px; font-size: 12px; }
   .bfonly-card-title { font-size: 13px; min-height: 38px; }
 }

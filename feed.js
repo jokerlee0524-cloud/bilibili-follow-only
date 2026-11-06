@@ -5,8 +5,12 @@
  *   filter        ：保留原生首页，只把非关注 UP 主的卡片藏起来
  *
  * 数据来源：
- *   /x/relation/followings                   → 我的关注列表
+ *   /x/relation/followings                   → 我的关注列表（每项带 special / tag[-10] 特别关注标记）
+ *   /x/relation/tags + /x/relation/tag      → 特别关注成员（字段缺失时的兜底通道）
  *   /x/polymer/web-dynamic/v1/feed/all?type=video → 关注 UP 的动态视频（真正的「只关注」流）
+ *
+ * 范围开关 specialOnly：关 = 全部关注（默认）；开 = 只保留特别关注的 UP 主。
+ * 两种模式（replace / filter）共用同一个「活跃集合」。
  */
 (function () {
   'use strict';
@@ -21,7 +25,7 @@
   var CACHE_TTL = 12 * 60 * 60 * 1000; // 关注列表缓存 12 小时
   var FILL_BATCH = 24;                 // 每批渲染多少张卡
 
-  var DEFAULT_CFG = { enabled: true, mode: 'replace' };
+  var DEFAULT_CFG = { enabled: true, mode: 'replace', specialOnly: false };
 
   var cfg = Object.assign({}, DEFAULT_CFG);
   var following = null;   // { ts, mid, total, list, set }
@@ -33,6 +37,7 @@
   var metaEl = null;
   var footEl = null;
   var hiddenCount = 0;
+  var specialUnavailable = false;  // 开了特别关注但读不到列表 → 降级按全部关注显示
   var filterObserver = null;
   var reinsertObserver = null;
   var started = false;
@@ -90,10 +95,12 @@
     var r = await storageGet(CFG_KEY);
     cfg = Object.assign({}, DEFAULT_CFG, r[CFG_KEY] || {});
     if (IS_DEV) {
-      // 本地夹具用：?dev=1&mode=filter / ?dev=1&off=1
+      // 本地夹具用：?dev=1&mode=filter / ?dev=1&off=1 / ?dev=1&special=1 / ?dev=1&nospecial=1
       var q = new URLSearchParams(location.search);
       if (q.get('mode')) cfg.mode = q.get('mode');
       if (q.get('off') === '1') cfg.enabled = false;
+      if (q.get('special') === '1') cfg.specialOnly = true;
+      if (q.get('special') === '0') cfg.specialOnly = false;
     }
   }
 
@@ -105,26 +112,78 @@
 
   /* ---------------- 关注列表 ---------------- */
 
+  /* 旧版（1.0.x）缓存把 special 字段丢掉了，开了特别关注就必须重拉一次 */
+  function hasSpecialInfo(data) {
+    if (!data || !data.list || !data.list.length) return false;
+    if (Array.isArray(data.specialMids) || data.specialTried) return true;
+    return data.list.some(function (u) {
+      return typeof u.special !== 'undefined' || Array.isArray(u.tag);
+    });
+  }
+
+  function forceNoSpecial() {
+    return IS_DEV && /[?&]nospecial=1/.test(location.search);
+  }
+
   async function loadFollowing(nav) {
     var cached = (await storageGet(FOLLOW_KEY))[FOLLOW_KEY];
-    if (cached && cached.list && cached.list.length &&
-        cached.mid === nav.mid && Date.now() - cached.ts < CACHE_TTL) {
+    var fresh = cached && cached.list && cached.list.length &&
+      cached.mid === nav.mid && Date.now() - cached.ts < CACHE_TTL;
+    if (fresh && (!cfg.specialOnly || hasSpecialInfo(cached))) {
       return decorate(cached);
     }
+
     var res = await globalThis.bfApi.getFollowing(nav.mid, function (got, total) {
       setMeta('正在读取关注列表 ' + got + (total ? ' / ' + total : '') + ' 位…');
     });
     var data = { ts: Date.now(), mid: nav.mid, total: res.total || res.list.length, list: res.list };
+    var dec = decorate(data);
+
+    // 主通道一个特别关注都没读到 → 走分组接口兜底，结果写回缓存（TTL 内不重复请求）
+    if (cfg.specialOnly && dec.special.size === 0 && !forceNoSpecial() && !data.specialTried) {
+      try {
+        var mids = await globalThis.bfApi.getSpecialFollowings();
+        if (mids && mids.length) data.specialMids = mids;
+      } catch (e) { /* 兜底失败按空集合降级，不阻断首页 */ }
+      data.specialTried = true;
+      dec = decorate(data);
+    }
+
     var o = {};
     o[FOLLOW_KEY] = data;
     await storageSet(o);
-    return decorate(data);
+    return dec;
   }
 
   function decorate(data) {
     var set = new Set();
-    data.list.forEach(function (u) { set.add(String(u.mid)); });
-    return { ts: data.ts, mid: data.mid, total: data.list.length, list: data.list, set: set };
+    var special = new Set();
+    data.list.forEach(function (u) {
+      var mid = String(u.mid);
+      set.add(mid);
+      var tagged = Array.isArray(u.tag) && u.tag.some(function (t) { return Number(t) === -10; });
+      if (u.special === 1 || u.special === true || tagged) special.add(mid);
+    });
+    if (Array.isArray(data.specialMids)) {
+      data.specialMids.forEach(function (m) { special.add(String(m)); });
+    }
+    // DEV：模拟 B 站不再返回 special 字段（且尚未拿到兜底结果），验证分组接口兜底
+    if (IS_DEV && /[?&]nofield=1/.test(location.search) && !Array.isArray(data.specialMids)) {
+      special = new Set();
+    }
+    if (forceNoSpecial()) special = new Set();  // DEV：模拟接口读不到特别关注
+    return {
+      ts: data.ts, mid: data.mid, total: data.list.length,
+      list: data.list, set: set, special: special
+    };
+  }
+
+  /* 当前生效的 UP 主集合：特别关注开关 + 读不到时的降级 */
+  function activeSet() {
+    if (following && cfg.specialOnly && !specialUnavailable && following.special.size) {
+      return following.special;
+    }
+    return following ? following.set : null;
   }
 
   async function refreshFollowing() {
@@ -201,7 +260,16 @@
       teardown();
       await boot(true);
     });
+    var btnSpecial = h('button', 'bfonly-btn ghost bfonly-scope-btn', '☆ 特别关注');
+    btnSpecial.type = 'button';
+    btnSpecial.addEventListener('click', async function () {
+      cfg.specialOnly = !cfg.specialOnly;
+      await saveCfg();
+      teardown();
+      await boot(true);
+    });
     right.appendChild(btnMode);
+    right.appendChild(btnSpecial);
     right.appendChild(btnRefresh);
 
     head.appendChild(left);
@@ -215,7 +283,18 @@
     panel.appendChild(footEl);
 
     insertPanel();
+    syncScopeBtn();
     return panel;
+  }
+
+  function syncScopeBtn() {
+    var b = document.querySelector('#bfonly-panel .bfonly-scope-btn');
+    if (!b) return;
+    b.classList.toggle('active', !!cfg.specialOnly);
+    b.textContent = cfg.specialOnly ? '★ 特别关注' : '☆ 特别关注';
+    b.title = cfg.specialOnly
+      ? '当前只看特别关注，点击切回全部关注'
+      : '点击只显示设为特别关注的 UP 主';
   }
 
   function setMeta(text) {
@@ -293,7 +372,9 @@
     if (!gridEl) return;
     gridEl.textContent = '';
     if (!feed.items.length) {
-      renderState('empty', '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
+      renderState('empty', cfg.specialOnly
+        ? '特别关注的 UP 主最近没有发视频，过段时间再来看看。'
+        : '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
       return;
     }
     feed.items.forEach(function (it) { gridEl.appendChild(makeCard(it)); });
@@ -313,39 +394,72 @@
       btn.addEventListener('click', function () { loadFeed(true); });
       footEl.appendChild(btn);
     } else if (feed.items.length) {
-      footEl.appendChild(h('span', 'bfonly-hint', '没有更多了 · 只显示你关注的 UP 主'));
+      footEl.appendChild(h('span', 'bfonly-hint',
+        specialUnavailable ? '没有更多了 · 按全部关注显示'
+          : (cfg.specialOnly ? '没有更多了 · 只显示特别关注的 UP 主'
+                             : '没有更多了 · 只显示你关注的 UP 主')));
+    }
+    if (specialUnavailable) {
+      footEl.appendChild(h('span', 'bfonly-hint warn',
+        '⚠ 读不到特别关注列表，暂时按全部关注显示'));
     }
   }
 
   /* ---------------- 拉取关注流 ---------------- */
 
+  /* 按当前范围过滤已拉到的动态；降级时退回全部关注 */
+  function visibleItems() {
+    if (!cfg.specialOnly || specialUnavailable ||
+        !following || !following.special || !following.special.size) {
+      return feed.raw.slice();
+    }
+    return feed.raw.filter(function (x) { return following.special.has(String(x.mid)); });
+  }
+
+  async function fetchPage() {
+    var res = await globalThis.bfApi.getFollowFeed(feed.offset);
+    var known = new Set(feed.raw.map(function (x) { return x.bvid; }));
+    res.items.forEach(function (x) {
+      if (!known.has(x.bvid)) { feed.raw.push(x); known.add(x.bvid); }
+    });
+    feed.offset = res.offset || '';
+    feed.hasMore = !!res.hasMore && !!res.offset;
+    return res.rawCount || 0;
+  }
+
   async function loadFeed(more) {
     if (feed.loading) return;
     feed.loading = true;
     updateFoot();
-    var pages = more ? 1 : 2;
     var rawSeen = 0;
     try {
+      var pages = more ? 1 : 2;
       for (var i = 0; i < pages; i++) {
         if (!feed.hasMore) break;
-        var res = await globalThis.bfApi.getFollowFeed(feed.offset);
-        var known = new Set(feed.raw.map(function (x) { return x.bvid; }));
-        res.items.forEach(function (x) {
-          if (!known.has(x.bvid)) { feed.raw.push(x); known.add(x.bvid); }
-        });
-        rawSeen += res.rawCount || 0;
-        feed.offset = res.offset || '';
-        feed.hasMore = !!res.hasMore && !!res.offset;
-        if (!res.items.length) break;
+        rawSeen += await fetchPage();
       }
 
-      feed.items = feed.raw.slice();
+      /* 特别关注的视频往往很稀疏：继续往下翻，直到凑够卡片或到底。
+       * 上限 6 页，避免为了 1 个冷门 UP 主把整条动态流翻完。 */
+      var scoped = cfg.specialOnly && !specialUnavailable &&
+        following && following.special && following.special.size;
+      if (scoped) {
+        var target = more ? visibleItems().length + 1 : 8;
+        var guard = more ? 4 : 6;
+        while (feed.hasMore && visibleItems().length < target && guard-- > 0) {
+          rawSeen += await fetchPage();
+        }
+      }
+
+      feed.items = visibleItems();
       status = 'ready';
-      if (!feed.items.length && rawSeen > 0) {
+      if (!feed.items.length && rawSeen > 0 && !cfg.specialOnly) {
         throw new Error('返回 ' + rawSeen + ' 条动态但解析不到视频，B 站可能改版了');
       }
       if (!feed.items.length) {
-        renderState('empty', '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
+        renderState('empty', cfg.specialOnly
+          ? '特别关注的 UP 主最近没有发视频，过段时间再来看看。'
+          : '关注列表里的 UP 主最近没有发视频，过段时间再来看看。');
       } else {
         renderFeed();
       }
@@ -391,12 +505,14 @@
 
   function applyFilter() {
     var cards = document.querySelectorAll('#app ' + CARD_SEL + ', #i_cecream ' + CARD_SEL + ', #reco_list ' + CARD_SEL);
+    var active = activeSet();
+    var scoped = !!(cfg.specialOnly && following && following.special && following.special.size);
     var hidden = 0;
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
       if (card.closest('#bfonly-panel')) continue;
       var mid = cardMid(card);
-      var keep = mid && following && following.set.has(mid);
+      var keep = mid && active && active.has(mid);
       if (keep) {
         if (card.dataset.bfonlyHidden === '1') {
           card.style.removeProperty('display');
@@ -418,6 +534,16 @@
       chip.id = 'bfonly-chip';
       var txt = h('span', 'bfonly-chip-text', '');
       chip.appendChild(txt);
+      var sw = h('button', 'bfonly-chip-btn bfonly-chip-scope', '');
+      sw.type = 'button';
+      sw.addEventListener('click', async function () {
+        cfg.specialOnly = !cfg.specialOnly;
+        await saveCfg();
+        teardown();
+        started = false;
+        await boot(true);
+      });
+      chip.appendChild(sw);
       var off = h('button', 'bfonly-chip-btn', '关闭');
       off.type = 'button';
       off.addEventListener('click', async function () {
@@ -428,8 +554,12 @@
       chip.appendChild(off);
       document.body.appendChild(chip);
     }
+    var scopeBtn = chip.querySelector('.bfonly-chip-scope');
+    if (scopeBtn) scopeBtn.textContent = scoped ? '看全部关注' : '只看特别关注';
     chip.querySelector('.bfonly-chip-text').textContent =
-      '只看关注 · 已隐藏 ' + hiddenCount + ' 条非关注内容';
+      (specialUnavailable ? '⚠ 读不到特别关注 · 按全部关注'
+        : (scoped ? '只看特别关注' : '只看关注')) +
+      ' · 已隐藏 ' + hiddenCount + ' 条' + (scoped ? '非特别关注' : '非关注') + '内容';
   }
 
   function startFilter() {
@@ -470,10 +600,21 @@
     reinsertObserver.observe(document.body, { childList: true, subtree: true });
   }
 
+  /* 切换模式 / 范围时重建，别让上一次的游标和卡片残留 */
+  function resetFeed() {
+    feed.raw = [];
+    feed.items = [];
+    feed.offset = '';
+    feed.hasMore = true;
+    feed.loading = false;
+  }
+
   async function boot(force) {
     if (!force && started) return;
     started = true;
     await loadCfg();
+    specialUnavailable = false;
+    resetFeed();
 
     if (!cfg.enabled) {
       status = 'disabled';
@@ -513,7 +654,14 @@
       return;
     }
 
-    setMeta('已关注 ' + following.total + ' 位 UP 主 · 只显示他们的视频');
+    specialUnavailable = !!(cfg.specialOnly && !following.special.size);
+    if (cfg.specialOnly) {
+      setMeta(specialUnavailable
+        ? '⚠ 读不到特别关注列表，暂时按全部关注显示'
+        : '已关注 ' + following.total + ' 位 · 只看其中 ' + following.special.size + ' 位特别关注');
+    } else {
+      setMeta('已关注 ' + following.total + ' 位 UP 主 · 只显示他们的视频');
+    }
     document.documentElement.classList.add('bfonly-replace');
     await loadFeed(false);
     keepPanelAlive();
@@ -533,6 +681,7 @@
           return;
         }
         following = await loadFollowing(nav);
+        specialUnavailable = !!(cfg.specialOnly && !following.special.size);
         startFilter();
       } catch (e) {
         var chip = h('div', 'bfonly-chip warn');
@@ -561,7 +710,8 @@
     chrome.storage.onChanged.addListener(function (changes, area) {
       if (area !== 'local' || !changes[CFG_KEY]) return;
       var nv = Object.assign({}, DEFAULT_CFG, changes[CFG_KEY].newValue || DEFAULT_CFG);
-      var same = nv.enabled === cfg.enabled && nv.mode === cfg.mode;
+      var same = nv.enabled === cfg.enabled && nv.mode === cfg.mode &&
+        !!nv.specialOnly === !!cfg.specialOnly;
       cfg = nv;
       if (same) return;
       teardown();

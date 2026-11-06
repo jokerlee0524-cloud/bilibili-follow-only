@@ -1,4 +1,4 @@
-/* B 站接口封装：wbi 签名 + 关注列表 + 关注动态流
+/* B 站接口封装：wbi 签名 + 关注列表 + 特别关注分组 + 关注动态流
  * 运行在 bilibili.com 页面内（内容脚本），fetch 自带登录 Cookie。
  */
 (function () {
@@ -15,6 +15,21 @@
   var keyCache = { imgKey: '', subKey: '', ts: 0 };
 
   var DEV = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+
+  /* 关系列表里的「特别关注」标记：
+   *   special === 1 / true，或 tag 数组里含 -10（特别关注分组恒为 -10）。
+   * 两种写法都认，B 站不同版本返回过其中一种。
+   */
+  function isSpecial(u) {
+    if (!u) return 0;
+    if (u.special === 1 || u.special === true || u.special === '1') return 1;
+    if (Array.isArray(u.tag)) {
+      for (var i = 0; i < u.tag.length; i++) {
+        if (Number(u.tag[i]) === -10) return 1;
+      }
+    }
+    return 0;
+  }
 
   function mixinKey(orig) {
     var out = '';
@@ -115,7 +130,7 @@
     if (DEV) {
       var mock = await jget(location.origin + '/mock/followings.json');
       var list = ((mock.data && mock.data.list) || []).map(function (u) {
-        return { mid: String(u.mid), uname: u.uname, face: u.face };
+        return { mid: String(u.mid), uname: u.uname, face: u.face, special: isSpecial(u) };
       });
       if (onProgress) onProgress(list.length, list.length);
       return { total: list.length, list: list };
@@ -130,13 +145,67 @@
       var d = res.data || {};
       total = d.total || total;
       var batch = (d.list || []).map(function (u) {
-        return { mid: String(u.mid), uname: u.uname, face: u.face };
+        return { mid: String(u.mid), uname: u.uname, face: u.face, special: isSpecial(u) };
       });
       all = all.concat(batch);
       if (onProgress) onProgress(all.length, total);
       if (batch.length < 50 || all.length >= total) break;
     }
     return { total: total, list: all };
+  }
+
+  /* 特别关注成员（兜底通道）
+   *
+   * 主通道是 x/relation/followings 里的 special 字段 / tag 含 -10，零额外请求。
+   * 当字段缺失（B 站改版、旧缓存、隐私设置）时走这里：
+   *   /x/relation/tags          → 找到「特别关注」分组（tagid 恒为 -10）
+   *   /x/relation/tag?tagid=-10 → 分页取该分组下的 mid
+   * 该接口部分账号需要 wbi 签名，所以失败时自动用签名参数重试一次。
+   */
+  async function getSpecialFollowings() {
+    if (DEV) {
+      var mock = await jgetRaw(location.origin + '/mock/special.json');
+      var arr = (mock && mock.data) || [];
+      if (!Array.isArray(arr)) arr = arr.list || [];
+      return arr.map(function (u) { return String(u.mid); }).filter(Boolean);
+    }
+
+    var tagsRes = await jgetRaw('https://api.bilibili.com/x/relation/tags');
+    var tags = (tagsRes && tagsRes.data) || [];
+    if (!Array.isArray(tags)) tags = tags.tags || [];
+    var group = null;
+    for (var i = 0; i < tags.length; i++) {
+      if (Number(tags[i].tagid) === -10 || tags[i].name === '特别关注') {
+        group = tags[i];
+        break;
+      }
+    }
+    if (!group) return [];
+
+    var out = [];
+    for (var pn = 1; pn <= 10; pn++) {
+      var base = 'https://api.bilibili.com/x/relation/tag?tagid=' +
+        encodeURIComponent(String(group.tagid)) + '&pn=' + pn + '&ps=50';
+      var res = null;
+      try {
+        res = await jgetRaw(base);
+      } catch (e) { res = null; }
+      if (!res || res.code !== 0) {
+        // 换带 wbi 签名的版本再试一次
+        try {
+          var keys = await ensureKeys();
+          res = await jgetRaw(base + '&' + signQuery({}, keys.imgKey, keys.subKey));
+        } catch (e2) { res = null; }
+      }
+      if (!res || res.code !== 0) break;
+      var page = res.data;
+      if (!Array.isArray(page)) page = (page && page.list) || [];
+      for (var j = 0; j < page.length; j++) {
+        if (page[j] && page[j].mid != null) out.push(String(page[j].mid));
+      }
+      if (page.length < 50) break;
+    }
+    return out;
   }
 
   /* 关注动态流（只要视频），无限翻页 */
@@ -182,6 +251,7 @@
     isDev: DEV,
     getNav: getNav,
     getFollowing: getFollowing,
+    getSpecialFollowings: getSpecialFollowings,
     getFollowFeed: getFollowFeed
   };
 })();

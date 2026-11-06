@@ -4,12 +4,12 @@
   "data": {
     "total": 6,
     "list": [
-      { "mid": 1001, "uname": "老番茄", "face": "mock/covers/f1.png" },
-      { "mid": 1002, "uname": "影视飓风", "face": "mock/covers/f2.png" },
-      { "mid": 1003, "uname": "何同学", "face": "mock/covers/f1.png" },
-      { "mid": 1004, "uname": "老师好我叫何同学", "face": "mock/covers/f1.png" },
-      { "mid": 1005, "uname": "稚晖君", "face": "mock/covers/f2.png" },
-      { "mid": 1006, "uname": "小约翰可汗", "face": "mock/covers/f1.png" }
+      { "mid": 1001, "uname": "老番茄", "face": "mock/covers/f1.png", "special": 1 },
+      { "mid": 1002, "uname": "影视飓风", "face": "mock/covers/f2.png", "special": 0 },
+      { "mid": 1003, "uname": "何同学", "face": "mock/covers/f1.png", "tag": [-10], "special": 0 },
+      { "mid": 1004, "uname": "老师好我叫何同学", "face": "mock/covers/f1.png", "special": 0 },
+      { "mid": 1005, "uname": "稚晖君", "face": "mock/covers/f2.png", "special": 1 },
+      { "mid": 1006, "uname": "小约翰可汗", "face": "mock/covers/f1.png", "special": 0 }
     ]
   }
 }

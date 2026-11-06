@@ -2,7 +2,7 @@
 'use strict';
 
 var CFG_KEY = 'bfonly_cfg';
-var DEFAULTS = { enabled: true, mode: 'replace' };
+var DEFAULTS = { enabled: true, mode: 'replace', specialOnly: false };
 
 chrome.runtime.onInstalled.addListener(function () {
   chrome.storage.local.get([CFG_KEY], function (r) {

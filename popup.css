@@ -107,6 +107,20 @@ body {
 
 .switch input:checked + .slider { background: var(--pink); }
 .switch input:checked + .slider::before { transform: translateX(19px); }
+.switch input:disabled + .slider { cursor: default; }
+
+/* ---------- 「只看特别关注」范围开关 ---------- */
+.sub-switch {
+  padding: 11px 12px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  transition: opacity 0.16s ease;
+}
+
+.sub-switch.off { opacity: 0.5; }
+.sub-switch .row-title { display: flex; align-items: center; gap: 5px; }
+.star { color: var(--pink); font-size: 12px; }
 
 /* ---------- 模式 ---------- */
 .seg {
