@@ -101,6 +101,12 @@ v1.1.1 加了版本握手：弹窗会显示页面脚本版本，发现不一致�
 
 ## 安装
 
+### 下载打包版（推荐）
+
+到 [Releases 页面](https://github.com/jokerlee0524-cloud/bilibili-follow-only/releases/latest) 下载最新版 `bilibili-follow-only-v*.zip`，解压到一个固定目录，再按下面第 2、3 步加载即可，不用装 git。
+
+> 已装旧版：在 `chrome://extensions` 点「重新加载」，再刷新 B 站首页。弹窗底部显示「页面脚本 v1.2.0」即生效。
+
 ### Chrome / Edge（手动加载，3 步）
 
 1. 把仓库克隆到本地任意目录
