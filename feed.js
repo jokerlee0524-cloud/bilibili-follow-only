@@ -20,7 +20,7 @@
   var IS_DEV = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && /[?&]dev=1/.test(location.search);
   if (!IS_HOME && !IS_DEV) return;
 
-  var FEED_VERSION = '1.2.0';          // 与 manifest.json 保持一致，供 popup 做版本握手
+  var FEED_VERSION = '1.2.1';          // 与 manifest.json 保持一致，供 popup 做版本握手
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
   var CACHE_TTL = 12 * 60 * 60 * 1000;  // 关注列表缓存 12 小时
@@ -401,6 +401,67 @@
 
   /* ---------------- 分区模式：上★特别关注 / 下其它关注 ---------------- */
 
+  /* B 站「特别关注」是内置分组 tagid=-10（/x/relation/tags、/x/relation/tag）。
+   * 关注管理页在 space.bilibili.com，不在本扩展 content_scripts 匹配范围，
+   * 跳转后不会被自己的面板接管。mid 来自 getNav()，即当前登录账号。 */
+  function specialListUrl() {
+    var mid = following && following.mid ? String(following.mid) : '';
+    if (!mid) return 'https://space.bilibili.com/';
+    return 'https://space.bilibili.com/' + encodeURIComponent(mid) + '/relation/follow?tagid=-10';
+  }
+
+  /* 完整特别关注名单：following.list 已在缓存里，零额外请求。
+   * 官方页面若没自动选中分组，这里仍给出准确名单，不会出现「点了没反应」。 */
+  function specialRoster() {
+    var box = h('div', 'bfonly-roster');
+    box.id = 'bfonly-roster';
+    box.hidden = true;
+
+    var ups = (following && following.list ? following.list : []).filter(function (u) {
+      return following.special && following.special.has(String(u.mid));
+    });
+
+    var bar = h('div', 'bfonly-roster-bar');
+    bar.appendChild(h('span', 'bfonly-roster-count',
+      '★ 特别关注 · ' + ups.length + ' 位 UP 主'));
+    var ext = h('a', 'bfonly-roster-ext', '在 B 站管理 ↗');
+    ext.href = specialListUrl();
+    ext.target = '_blank';
+    ext.rel = 'noopener noreferrer';
+    ext.title = '打开 B 站关注管理页的特别关注分组';
+    bar.appendChild(ext);
+    box.appendChild(bar);
+
+    if (!ups.length) {
+      box.appendChild(h('div', 'bfonly-roster-empty',
+        '还没有特别关注，点「在 B 站管理」去设置；设置后点面板「刷新」即可生效。'));
+      return box;
+    }
+
+    var list = h('div', 'bfonly-roster-list');
+    ups.forEach(function (u) {
+      var a = h('a', 'bfonly-roster-item');
+      a.href = 'https://space.bilibili.com/' + String(u.mid);
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.title = u.uname || String(u.mid);
+      if (u.face) {
+        var img = h('img', 'bfonly-roster-face');
+        img.src = u.face;
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+        img.alt = u.uname || '';
+        a.appendChild(img);
+      } else {
+        a.appendChild(h('span', 'bfonly-roster-face ph', (u.uname || '?').slice(0, 1)));
+      }
+      a.appendChild(h('span', 'bfonly-roster-name', u.uname || String(u.mid)));
+      list.appendChild(a);
+    });
+    box.appendChild(list);
+    return box;
+  }
+
   /* 把同一条关注动态流按作者切成两份，不需要额外请求 */
   function splitItems() {
     var special = [], others = [];
@@ -450,16 +511,49 @@
     return out;
   }
 
-  function makeSection(kind, icon, title, sub, items, guide, emptyMsg) {
+  function makeSection(kind, icon, title, sub, items, guide, emptyMsg, opts) {
+    opts = opts || {};
     var sec = h('section', 'bfonly-section bfonly-section-' + kind);
     sec.id = 'bfonly-section-' + kind;
 
     var head = h('div', 'bfonly-section-head');
-    var t = h('div', 'bfonly-section-title');
-    t.appendChild(h('span', 'bfonly-section-icon', icon));
-    t.appendChild(h('span', '', title));
+    var t;
+    if (opts.href) {
+      // 整个栏目标题可点：新标签直达 B 站特别关注分组列表
+      t = h('a', 'bfonly-section-title bfonly-section-title-link');
+      t.href = opts.href;
+      t.target = '_blank';
+      t.rel = 'noopener noreferrer';
+      t.title = opts.hint || ('打开' + title + '列表');
+      t.setAttribute('aria-label', opts.hint || ('打开' + title + '列表'));
+      t.appendChild(h('span', 'bfonly-section-icon', icon));
+      t.appendChild(h('span', 'bfonly-section-title-text', title));
+      t.appendChild(h('span', 'bfonly-section-title-arrow', '↗'));
+    } else {
+      t = h('div', 'bfonly-section-title');
+      t.appendChild(h('span', 'bfonly-section-icon', icon));
+      t.appendChild(h('span', '', title));
+    }
     head.appendChild(t);
-    head.appendChild(h('div', 'bfonly-section-sub', sub));
+
+    var subRow = h('div', 'bfonly-section-subrow');
+    subRow.appendChild(h('div', 'bfonly-section-sub', sub));
+    if (opts.roster) {
+      var btn = h('button', 'bfonly-roster-btn', '完整名单 ▾');
+      btn.type = 'button';
+      btn.id = 'bfonly-roster-btn';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-controls', 'bfonly-roster');
+      btn.addEventListener('click', function () {
+        var r = document.getElementById('bfonly-roster');
+        if (!r) return;
+        r.hidden = !r.hidden;
+        btn.textContent = r.hidden ? '完整名单 ▾' : '收起名单 ▴';
+        btn.setAttribute('aria-expanded', r.hidden ? 'false' : 'true');
+      });
+      subRow.appendChild(btn);
+    }
+    head.appendChild(subRow);
 
     if (items.length) {
       var row = h('div', 'bfonly-up-list');
@@ -467,6 +561,8 @@
       head.appendChild(row);
     }
     sec.appendChild(head);
+
+    if (opts.roster) sec.appendChild(specialRoster());
 
     if (guide) {
       sec.appendChild(guide);
@@ -503,7 +599,8 @@
     gridEl.appendChild(makeSection('special', '★', '特别关注',
       (following && following.special ? following.special.size : 0) + ' 位 UP 主 · ' +
         s.special.length + ' 条视频',
-      s.special, guide, '特别关注的 UP 主最近没有发视频，过段时间再来看看。'));
+      s.special, guide, '特别关注的 UP 主最近没有发视频，过段时间再来看看。',
+      { href: specialListUrl(), hint: '打开 B 站「特别关注」分组列表（新标签）', roster: true }));
 
     gridEl.appendChild(makeSection('others', '◇', '其它关注',
       uniqueUps(s.others) + ' 位 UP 主 · ' + s.others.length + ' 条视频',

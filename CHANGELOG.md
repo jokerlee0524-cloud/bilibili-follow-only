@@ -2,6 +2,27 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.2.1] — 2026-11-07
+
+### 新增：点「特别关注」栏目直达列表
+
+- 上下分区的**上半区标题「★ 特别关注」整块可点**，新标签打开 B 站关注管理页的特别关注分组：
+  `https://space.bilibili.com/{你的UID}/relation/follow?tagid=-10`，UID 取自 `getNav()`
+- 标题旁新增「**完整名单**」按钮 → 展开本地完整特别关注 UP 主名单（头像 + 名字，点头像进空间）。
+  数据来自已缓存的关注列表，**零额外请求**；名单顶部另有「在 B 站管理 ↗」入口
+- 链接带 `target="_blank"` / `rel="noopener noreferrer"` / `aria-label`，键盘可聚焦；
+  「其它关注」区标题保持不可点
+- 官方页若未自动选中分组参数，本地名单仍给出准确结果，不会「点了没反应」；
+  账号没设特别关注时，名单给引导文案与设置入口
+
+### 入口依据
+
+- 特别关注是 B 站内置分组 `tagid=-10`：`/x/relation/tags`、`/x/relation/tag?tagid=-10`，
+  与 v1.1.1 分组兜底逻辑一致
+- 关注页路径 `/relation/follow`：Greasy Fork 关注管理脚本、2026 年 B 站动态筛选助手教程均使用；
+  本次实测该 URL 返回 200
+- SPA 是否自动选中 `tagid=-10` 无法在未登录态验证，故加本地名单兜底，不把宝押在单一 URL 上
+
 ## [1.2.0] — 2026-11-06
 
 ### 新增：首页上下分区（默认模式）
@@ -120,3 +141,4 @@
 [1.1.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.1.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.2.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
+[1.2.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
