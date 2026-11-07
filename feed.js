@@ -20,7 +20,7 @@
   var IS_DEV = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && /[?&]dev=1/.test(location.search);
   if (!IS_HOME && !IS_DEV) return;
 
-  var FEED_VERSION = '1.2.1';          // 与 manifest.json 保持一致，供 popup 做版本握手
+  var FEED_VERSION = '1.2.2';          // 与 manifest.json 保持一致，供 popup 做版本握手
   var CFG_KEY = 'bfonly_cfg';
   var FOLLOW_KEY = 'bfonly_following';
   var CACHE_TTL = 12 * 60 * 60 * 1000;  // 关注列表缓存 12 小时

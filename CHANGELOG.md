@@ -2,6 +2,16 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.2.2] — 2026-11-07
+
+### 修复：点「特别关注」打开的页面不选中分组
+
+实测发现：B 站关注页整页直开 `?tagid=-10` 时，SPA 不一定按 query 选中分组，会回落到「全部关注」——用户感知为「特别关注点不开」。
+
+- 新增 `space.js` 内容脚本（仅匹配 `space.bilibili.com/*/relation/follow*`）：页面加载后查找 `href` 含目标 `tagid` 的侧边栏分组项，未激活则自动补点一次；侧边栏结构变动时按「特别关注」文字兜底匹配；找不到（未登录/看别人空间）10 秒后静默放弃
+- 链接格式本身经实测与 B 站侧边栏一致（全部关注 = `tagid=-1`，特别关注 = `tagid=-10`），无需改动
+- 验证：CDP 7/7 通过——标题链接属性回归、`tagid=-1` 不误点、`tagid=-10` 未登录静默无异常、真实首页注入 v1.2.2、0 页面报错
+
 ## [1.2.1] — 2026-11-07
 
 ### 新增：点「特别关注」栏目直达列表
@@ -142,3 +152,4 @@
 [1.1.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.2.0]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
 [1.2.1]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
+[1.2.2]: https://github.com/jokerlee0524-cloud/bilibili-follow-only/commits/main
